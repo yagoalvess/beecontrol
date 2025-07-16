@@ -72,10 +72,28 @@ class _CaixaScreenState extends State<CaixaScreen> {
         itemCount: historico.length,
         itemBuilder: (_, index) {
           final item = historico[index];
-          return ListTile(
-            title: Text(item['descricao']!),
-            subtitle: Text('${item['data']} às ${item['hora']}'),
+          return Dismissible(
+            key: Key(item['id'] ?? '${item['data']}-${item['hora']}-$index'),
+            direction: DismissDirection.endToStart,
+            background: Container(
+              color: Colors.red,
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: const Icon(Icons.delete, color: Colors.white),
+            ),
+            onDismissed: (_) async {
+              await HistoricoService().removerHistorico(widget.caixaId, index);
+              carregarHistorico();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Anotação excluída')),
+              );
+            },
+            child: ListTile(
+              title: Text(item['descricao']!),
+              subtitle: Text('${item['data']} às ${item['hora']}'),
+            ),
           );
+
         },
       ),
       floatingActionButton: FloatingActionButton(
