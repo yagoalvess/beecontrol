@@ -39,11 +39,22 @@ class _CaixaScreenState extends State<CaixaScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Nova Anotação'),
-        content: TextField(
-          autofocus: true,
-          onChanged: (val) => descricao = val,
-          decoration: const InputDecoration(labelText: 'Descrição'),
+        content: SizedBox(
+          height: 120, // ⬅️ altura maior da caixa de texto
+          child: TextField(
+            autofocus: true,
+            maxLines: null, // ⬅️ permite múltiplas linhas
+            expands: true, // ⬅️ expande para preencher o SizedBox
+            textAlignVertical: TextAlignVertical.top, // ⬅️ começa a digitar no topo
+            onChanged: (val) => descricao = val,
+            decoration: const InputDecoration(
+              labelText: 'Descrição',
+              border: OutlineInputBorder(), // ⬅️ borda visível
+              alignLabelWithHint: true,
+            ),
+          ),
         ),
+
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
           ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Salvar')),
