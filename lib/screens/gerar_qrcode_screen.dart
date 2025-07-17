@@ -51,13 +51,32 @@ class GerarQRCodeScreen extends StatelessWidget {
 
             RepaintBoundary(
               key: _qrKey,
-              child: QrImageView(
-                data: novoId,
-                version: QrVersions.auto,
-                size: 200,
-                backgroundColor: Colors.white, // Garante fundo branco
+              child: Container(
+                color: Colors.white,
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    QrImageView(
+                      data: novoId,
+                      version: QrVersions.auto,
+                      size: 200,
+                      backgroundColor: Colors.white,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'CX-${novoId.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0')}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
+
 
             const SizedBox(height: 20),
             const Text('Imprima ou cole este QR na caixa.'),
