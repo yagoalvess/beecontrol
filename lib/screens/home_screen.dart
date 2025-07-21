@@ -7,14 +7,13 @@ import 'package:abelhas/services/historico_service.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  // PASSO 1: Modificar _navegarParaCaixa
   void _navegarParaCaixa(BuildContext context, String caixaId, String localRealDaCaixa) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => CaixaScreen(
           caixaId: caixaId,
-          localCaixa: localRealDaCaixa, // Usa o local recebido
+          localCaixa: localRealDaCaixa,
         ),
       ),
     );
@@ -93,13 +92,11 @@ class HomeScreen extends StatelessWidget {
           final String id = caixaData['id'] ?? 'ID Desconhecido';
           final String local = caixaData['local']?.isNotEmpty == true ? caixaData['local']! : 'Local Desconhecido';
 
-
           return ListTile(
             title: Text('Caixa: $id'),
             subtitle: Text('Local: $local'),
             onTap: () {
               Navigator.pop(context);
-              // PASSO 2: Corrigir chamada aqui
               _navegarParaCaixa(context, id, local);
             },
           );
@@ -108,11 +105,10 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // PASSO 3: Corrigir _lerQRCode
   void _lerQRCode(BuildContext context) async {
     final codigoLido = await Navigator.push<String?>(
       context,
-      MaterialPageRoute(builder: (context) => const ScannerScreen()), // Use const
+      MaterialPageRoute(builder: (context) => const ScannerScreen()),
     );
 
     if (codigoLido != null && codigoLido.isNotEmpty && context.mounted) {
@@ -140,38 +136,62 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ... seu build method permanece o mesmo
+    final List<_MenuItem> menuItens = [
+      _MenuItem("Ler QR Code", Icons.qr_code_scanner, Colors.deepOrange, () => _lerQRCode(context)),
+      _MenuItem("Nova Caixa", Icons.add_box_outlined, Colors.blue, () => _criarNovaCaixa(context)),
+      _MenuItem("Ver Caixas", Icons.folder_open_outlined, Colors.purple, () => _verCaixasSalvas(context)),
+    ];
+
     return Scaffold(
       appBar: AppBar(title: const Text('BeeControl')),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton.icon(
-              icon: const Icon(Icons.qr_code_scanner),
-              label: const Text('Ler QR Code'),
-              onPressed: () => _lerQRCode(context),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.add_box_outlined),
-              label: const Text('Nova Caixa'),
-              onPressed: () => _criarNovaCaixa(context),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.folder_open_outlined),
-              label: const Text('Ver Caixas'),
-              onPressed: () => _verCaixasSalvas(context),
-            ),
-          ],
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 16,
+          runSpacing: 16,
+          children: menuItens.map((item) {
+            return SizedBox(
+              width: 100,
+              height: 100,
+              child: ElevatedButton(
+                onPressed: item.acao,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: item.cor,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  padding: const EdgeInsets.all(8),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(item.icone, size: 28, color: Colors.white),
+                    const SizedBox(height: 6),
+                    Text(
+                      item.titulo,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
         ),
       ),
     );
   }
 }
 
-// ... Sua classe ScannerScreen permanece a mesma
+class _MenuItem {
+  final String titulo;
+  final IconData icone;
+  final Color cor;
+  final VoidCallback acao;
+
+  _MenuItem(this.titulo, this.icone, this.cor, this.acao);
+}
+
 class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});
 
