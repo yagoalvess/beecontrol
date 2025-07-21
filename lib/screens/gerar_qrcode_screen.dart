@@ -79,13 +79,13 @@ class GerarQRCodeScreen extends StatelessWidget {
 
 
             const SizedBox(height: 20),
-            const Text('Imprima ou cole este QR na caixa.'),
+            const Text('Imprima e cole este QR na caixa.'),
 
             const SizedBox(height: 30),
             ElevatedButton.icon(
               onPressed: () => _compartilharQRCode(context),
               icon: const Icon(Icons.share),
-              label: const Text('Compartilhar QR Code'),
+              label: const Text('Compartilhar/Imprimir QR Code'),
             ),
           ],
         ),
