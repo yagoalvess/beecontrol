@@ -4,8 +4,18 @@ import 'caixa_screen.dart';
 import 'gerar_qrcode_screen.dart';
 import 'package:abelhas/services/historico_service.dart';
 
+// ... código anterior ...
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
+
+  final List<String> _locaisPreDefinidos = const [
+    'Apiário Central',
+    'Apiário do Sul',
+    'Apiário da Fazenda Nova',
+    'Apiário Experimental',
+    'Apiário da Mata',
+  ];
 
   void _navegarParaCaixa(BuildContext context, String caixaId, String localRealDaCaixa) {
     Navigator.push(
@@ -21,8 +31,13 @@ class HomeScreen extends StatelessWidget {
 
   void _criarNovaCaixa(BuildContext context) async {
     final historicoService = HistoricoService();
+
     String? localDaNovaCaixa = await _showInputDialog(
-        context, 'Local da Nova Caixa', 'Digite o nome do local');
+      context,
+      'Local da Nova Caixa',
+      'Digite ou selecione o nome do local',
+      _locaisPreDefinidos,
+    );
 
     if (localDaNovaCaixa != null && localDaNovaCaixa.isNotEmpty) {
       String novoId = await historicoService.gerarNovoId();
@@ -40,17 +55,41 @@ class HomeScreen extends StatelessWidget {
     }
   }
 
-  Future<String?> _showInputDialog(BuildContext context, String title, String hintText) async {
+  Future<String?> _showInputDialog(
+      BuildContext context,
+      String title,
+      String hintText,
+      List<String> predefinedOptions,
+      ) async {
     TextEditingController controller = TextEditingController();
+
     return showDialog<String>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: Text(title),
-          content: TextField(
-            controller: controller,
-            decoration: InputDecoration(hintText: hintText),
-            autofocus: true,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ...predefinedOptions.map((option) {
+                  return ListTile(
+                    title: Text(option),
+                    onTap: () {
+                      Navigator.of(context).pop(option);
+                    },
+                  );
+                }).toList(),
+
+                const Divider(),
+
+                TextField(
+                  controller: controller,
+                  decoration: InputDecoration(hintText: hintText),
+                  autofocus: true,
+                ),
+              ],
+            ),
           ),
           actions: <Widget>[
             TextButton(
@@ -62,7 +101,11 @@ class HomeScreen extends StatelessWidget {
             TextButton(
               child: const Text('Salvar'),
               onPressed: () {
-                Navigator.of(context).pop(controller.text);
+                if (controller.text.isNotEmpty) {
+                  Navigator.of(context).pop(controller.text);
+                } else {
+                  Navigator.of(context).pop();
+                }
               },
             ),
           ],
@@ -85,22 +128,64 @@ class HomeScreen extends StatelessWidget {
 
     showModalBottomSheet(
       context: context,
-      builder: (_) => ListView.builder(
-        itemCount: caixasComLocal.length,
-        itemBuilder: (context, index) {
-          final caixaData = caixasComLocal[index];
-          final String id = caixaData['id'] ?? 'ID Desconhecido';
-          final String local = caixaData['local']?.isNotEmpty == true ? caixaData['local']! : 'Local Desconhecido';
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              'Suas Caixas Salvas',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: caixasComLocal.length,
+              itemBuilder: (context, index) {
+                final caixaData = caixasComLocal[index];
+                final String id = caixaData['id'] ?? 'ID Desconhecido';
+                final String local = caixaData['local']?.isNotEmpty == true ? caixaData['local']! : 'Local Desconhecido';
 
-          return ListTile(
-            title: Text('Caixa: $id'),
-            subtitle: Text('Local: $local'),
-            onTap: () {
-              Navigator.pop(context);
-              _navegarParaCaixa(context, id, local);
-            },
-          );
-        },
+                // Modificação aqui para formatar o ID para exibição
+                // Isso remove o "CX-" se estiver presente e garante o padLeft.
+                String displayId = id.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
+
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  child: ListTile(
+                    leading: Icon(
+                      Icons.hive_outlined,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 30,
+                    ),
+                    title: Text(
+                      'Caixa-$displayId', // ALTERADO: Usa o displayId formatado
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text('Local: $local'),
+                    trailing: Icon(
+                      Icons.arrow_forward_ios,
+                      color: Colors.grey.shade600,
+                      size: 18,
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _navegarParaCaixa(context, id, local);
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -143,6 +228,7 @@ class HomeScreen extends StatelessWidget {
     ];
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(title: const Text('BeeControl')),
       body: Center(
         child: Wrap(

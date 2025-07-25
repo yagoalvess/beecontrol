@@ -40,13 +40,21 @@ class GerarQRCodeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Formata o ID para exibição: remove não-dígitos, preenche com zeros
+    final String formattedNumericId = novoId.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
+
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(title: const Text('QR Code da Nova Caixa')),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('ID: $novoId', style: const TextStyle(fontSize: 18)),
+            // ALTERADO AQUI: Substitui "ID: $novoId" por "Caixa-$formattedNumericId"
+            Text(
+              'Caixa-$formattedNumericId', // Exibe "Caixa-001", "Caixa-002", etc.
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 20),
 
             RepaintBoundary(
@@ -64,8 +72,9 @@ class GerarQRCodeScreen extends StatelessWidget {
                       backgroundColor: Colors.white,
                     ),
                     const SizedBox(height: 10),
+                    // Mantém o texto abaixo do QR Code como "CX-00X" (ou o que estava antes)
                     Text(
-                      'CX-${novoId.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0')}',
+                      'CX-${novoId.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0')}', // Mantém a formatação original que você tinha para esta linha
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -76,7 +85,6 @@ class GerarQRCodeScreen extends StatelessWidget {
                 ),
               ),
             ),
-
 
             const SizedBox(height: 20),
             const Text('Imprima e cole este QR na caixa.'),
