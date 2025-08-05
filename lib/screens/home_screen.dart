@@ -3,12 +3,17 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'caixa_screen.dart';
 import 'gerar_qrcode_screen.dart';
 import 'package:abelhas/services/historico_service.dart';
+import 'apiarios_screen.dart'; // Import da tela de listagem de apiários
 
-// ... código anterior ...
-
-class HomeScreen extends StatelessWidget {
+// Classe principal que agora é um StatefulWidget
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
   final List<String> _locaisPreDefinidos = const [
     'Apiário Central',
     'Apiário do Sul',
@@ -34,7 +39,7 @@ class HomeScreen extends StatelessWidget {
 
     String? localDaNovaCaixa = await _showInputDialog(
       context,
-      'Local da Nova Caixa',
+      'Local do Novo colmeias',
       'Digite ou selecione o nome do local',
       _locaisPreDefinidos,
     );
@@ -50,7 +55,7 @@ class HomeScreen extends StatelessWidget {
     } else {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Criação de caixa cancelada. Local não informado.')),
+        const SnackBar(content: Text('Criação da colmeia cancelada. Local não informado.')),
       );
     }
   }
@@ -114,78 +119,12 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  void _verCaixasSalvas(BuildContext context) async {
-    final caixasComLocal = await HistoricoService().getTodasCaixasComLocal();
-
-    if (!context.mounted) return;
-
-    if (caixasComLocal.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nenhuma caixa salva ainda.')),
-      );
-      return;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'Suas Caixas Salvas',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: caixasComLocal.length,
-              itemBuilder: (context, index) {
-                final caixaData = caixasComLocal[index];
-                final String id = caixaData['id'] ?? 'ID Desconhecido';
-                final String local = caixaData['local']?.isNotEmpty == true ? caixaData['local']! : 'Local Desconhecido';
-
-                // Modificação aqui para formatar o ID para exibição
-                // Isso remove o "CX-" se estiver presente e garante o padLeft.
-                String displayId = id.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
-
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.hive_outlined,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 30,
-                    ),
-                    title: Text(
-                      'Caixa-$displayId', // ALTERADO: Usa o displayId formatado
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text('Local: $local'),
-                    trailing: Icon(
-                      Icons.arrow_forward_ios,
-                      color: Colors.grey.shade600,
-                      size: 18,
-                    ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _navegarParaCaixa(context, id, local);
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+  // Lógica para navegação
+  void _verCaixasSalvas(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ApiariosScreen(),
       ),
     );
   }
@@ -222,9 +161,9 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<_MenuItem> menuItens = [
-      _MenuItem("Ler QR Code", Icons.qr_code_scanner, Colors.deepOrange, () => _lerQRCode(context)),
+      _MenuItem("Ler Caixa", Icons.qr_code_scanner, Colors.deepOrange, () => _lerQRCode(context)),
       _MenuItem("Nova Caixa", Icons.add_box_outlined, Colors.blue, () => _criarNovaCaixa(context)),
-      _MenuItem("Ver Caixas", Icons.folder_open_outlined, Colors.purple, () => _verCaixasSalvas(context)),
+      _MenuItem("Ver Colmeias", Icons.folder_open_outlined, Colors.purple, () => _verCaixasSalvas(context)),
     ];
 
     return Scaffold(
@@ -269,6 +208,8 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+// ... Código das outras classes (ScannerScreen, etc.) ...
+// A classe _MenuItem deve estar no final do arquivo, como estava originalmente.
 class _MenuItem {
   final String titulo;
   final IconData icone;
@@ -298,7 +239,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Ler QR Code')),
+      appBar: AppBar(title: const Text('Ler Caixa')),
       body: MobileScanner(
         controller: cameraController,
         onDetect: (capture) {

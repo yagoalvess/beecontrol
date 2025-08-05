@@ -1,8 +1,10 @@
+// lib/services/historico_service.dart
+
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class HistoricoService {
-  // Chave para armazenar as informações das caixas (ID e Local)
+  // Chave para armazenar as informações das caixas (ID, Local e Observação Fixa)
   static const _chaveListaCaixasInfo = 'todas_caixas_info';
   // Chave base para o histórico de cada caixa
   static const _chaveBaseHistorico = 'historico_';
@@ -45,9 +47,8 @@ class HistoricoService {
   }
 
   // ✅ Gera um novo ID para caixa (ex: cx-01, cx-02, ...)
-  // Este método agora usa getTodasCaixasComLocal para determinar o número
   Future<String> gerarNovoId() async {
-    final caixas = await getTodasCaixasComLocal(); // Modificado para usar a nova função
+    final caixas = await getTodasCaixasComLocal();
     int numero = caixas.length + 1;
     return 'cx-${numero.toString().padLeft(2, '0')}';
   }
@@ -63,29 +64,26 @@ class HistoricoService {
 
     // Verifica se uma caixa com o mesmo ID já existe
     if (!caixasExistentes.any((caixa) => caixa['id'] == id)) {
-      final novaCaixa = {'id': id, 'local': local};
+      // Adicionando um campo 'observacaoFixa' com valor nulo por padrão
+      final novaCaixa = {'id': id, 'local': local, 'observacaoFixa': null};
       caixasExistentesJson.add(json.encode(novaCaixa));
       await prefs.setStringList(_chaveListaCaixasInfo, caixasExistentesJson);
     } else {
-      // Opcional: Lidar com o caso de ID duplicado
-      // Pode lançar uma exceção, retornar um booleano, ou atualizar o local se essa for a intenção.
       print('Caixa com ID $id já existe. Nenhuma nova caixa foi criada.');
-      // Exemplo de como poderia atualizar o local se o ID já existir:
-      // await atualizarLocalDaCaixa(id, local);
     }
   }
 
   // ✅ Retorna a lista de todas as caixas existentes com ID e Local
-  Future<List<Map<String, String>>> getTodasCaixasComLocal() async {
+  // Este método agora também retorna a 'observacaoFixa'
+  Future<List<Map<String, dynamic>>> getTodasCaixasComLocal() async {
     final prefs = await SharedPreferences.getInstance();
     final dadosJson = prefs.getStringList(_chaveListaCaixasInfo) ?? [];
-    // É importante garantir que o mapa decodificado seja do tipo correto.
     return dadosJson
-        .map((e) => Map<String, String>.from(json.decode(e) as Map))
+        .map((e) => Map<String, dynamic>.from(json.decode(e) as Map))
         .toList();
   }
 
-  // Novo método: ✅ Atualiza o local de uma caixa existente
+  // ✅ Atualiza o local de uma caixa existente
   Future<bool> atualizarLocalDaCaixa(String caixaId, String novoLocal) async {
     final prefs = await SharedPreferences.getInstance();
     final caixasJson = prefs.getStringList(_chaveListaCaixasInfo) ?? [];
@@ -98,19 +96,17 @@ class HistoricoService {
 
     if (indexDaCaixa != -1) {
       caixas[indexDaCaixa]['local'] = novoLocal;
-      // Converte de volta para lista de strings JSON
       final novasCaixasJson = caixas.map((caixa) => json.encode(caixa)).toList();
       await prefs.setStringList(_chaveListaCaixasInfo, novasCaixasJson);
-      return true; // Sucesso
+      return true;
     }
-    return false; // Caixa não encontrada
+    return false;
   }
 
-  // Novo método: ✅ Remove uma caixa e seu histórico
+  // ✅ Remove uma caixa e seu histórico
   Future<void> removerCaixa(String caixaId) async {
     final prefs = await SharedPreferences.getInstance();
 
-    // 1. Remover a caixa da lista de informações de caixas
     final caixasJson = prefs.getStringList(_chaveListaCaixasInfo) ?? [];
     List<Map<String, dynamic>> caixas = caixasJson
         .map((str) => json.decode(str) as Map<String, dynamic>)
@@ -121,15 +117,42 @@ class HistoricoService {
     final novasCaixasJson = caixas.map((caixa) => json.encode(caixa)).toList();
     await prefs.setStringList(_chaveListaCaixasInfo, novasCaixasJson);
 
-    // 2. Remover o histórico associado a essa caixa
     final chaveHistorico = '$_chaveBaseHistorico$caixaId';
-    await prefs.remove(chaveHistorico); // Remove a chave do histórico
+    await prefs.remove(chaveHistorico);
   }
 
-  // Para compatibilidade, se você ainda precisar de uma lista apenas com os IDs.
-  // Pode ser útil em alguns cenários, mas getTodasCaixasComLocal é mais completo.
+  // ✅ Retorna a observação fixa de uma caixa
+  Future<String?> getObservacaoFixa(String caixaId) async {
+    final caixas = await getTodasCaixasComLocal();
+    final caixa = caixas.firstWhere(
+          (c) => c['id'] == caixaId,
+      orElse: () => {},
+    );
+    // Retorna a observação ou null se não existir
+    return caixa.containsKey('observacaoFixa') ? caixa['observacaoFixa'] as String? : null;
+  }
+
+  // ✅ Salva ou atualiza a observação fixa de uma caixa
+  Future<void> salvarObservacaoFixa(String caixaId, String? observacao) async {
+    final prefs = await SharedPreferences.getInstance();
+    final caixasJson = prefs.getStringList(_chaveListaCaixasInfo) ?? [];
+
+    List<Map<String, dynamic>> caixas = caixasJson
+        .map((str) => json.decode(str) as Map<String, dynamic>)
+        .toList();
+
+    int indexDaCaixa = caixas.indexWhere((caixa) => caixa['id'] == caixaId);
+
+    if (indexDaCaixa != -1) {
+      // Atualiza o campo 'observacaoFixa'
+      caixas[indexDaCaixa]['observacaoFixa'] = observacao;
+      final novasCaixasJson = caixas.map((caixa) => json.encode(caixa)).toList();
+      await prefs.setStringList(_chaveListaCaixasInfo, novasCaixasJson);
+    }
+  }
+
   Future<List<String>> getTodosOsIdsDeCaixas() async {
     final caixasComLocal = await getTodasCaixasComLocal();
-    return caixasComLocal.map((caixa) => caixa['id']!).toList();
+    return caixasComLocal.map((caixa) => caixa['id'] as String).toList();
   }
 }
