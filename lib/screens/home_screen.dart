@@ -3,9 +3,9 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'caixa_screen.dart';
 import 'gerar_qrcode_screen.dart';
 import 'package:abelhas/services/historico_service.dart';
-import 'apiarios_screen.dart'; // Import da tela de listagem de apiários
+import 'apiarios_screen.dart';
+import 'gerar_dois_qr_codes_screen.dart';
 
-// Classe principal que agora é um StatefulWidget
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -17,10 +17,12 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<String> _locaisPreDefinidos = const [
     'Apiário Central',
     'Apiário do Sul',
-    'Apiário da Fazenda Nova',
     'Apiário Experimental',
     'Apiário da Mata',
   ];
+
+  final Set<String> _caixasSelecionadasParaImpressaoDupla = {};
+  List<Map<String, dynamic>> _listaDeTodasAsCaixasParaSelecao = [];
 
   void _navegarParaCaixa(BuildContext context, String caixaId, String localRealDaCaixa) {
     Navigator.push(
@@ -36,11 +38,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _criarNovaCaixa(BuildContext context) async {
     final historicoService = HistoricoService();
-
     String? localDaNovaCaixa = await _showInputDialog(
       context,
-      'Local do Novo colmeias',
-      'Digite ou selecione o nome do local',
+      'Criar Nova Colmeia',
+      'Digite o local ou escolha um existente',
       _locaisPreDefinidos,
     );
 
@@ -67,30 +68,46 @@ class _HomeScreenState extends State<HomeScreen> {
       List<String> predefinedOptions,
       ) async {
     TextEditingController controller = TextEditingController();
-
     return showDialog<String>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(title),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            title,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 ...predefinedOptions.map((option) {
-                  return ListTile(
-                    title: Text(option),
-                    onTap: () {
-                      Navigator.of(context).pop(option);
-                    },
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: ListTile(
+                      leading: Icon(Icons.location_on, color: Theme.of(context).colorScheme.primary),
+                      title: Text(option, style: const TextStyle(fontWeight: FontWeight.w500)),
+                      onTap: () {
+                        Navigator.of(context).pop(option);
+                      },
+                    ),
                   );
                 }).toList(),
-
-                const Divider(),
-
+                const SizedBox(height: 16),
                 TextField(
                   controller: controller,
-                  decoration: InputDecoration(hintText: hintText),
+                  decoration: InputDecoration(
+                    hintText: hintText,
+                    labelText: 'Nome do Local',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    prefixIcon: Icon(Icons.edit_location_alt, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
+                    filled: true,
+                    fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                  ),
                   autofocus: true,
                 ),
               ],
@@ -98,12 +115,17 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           actions: <Widget>[
             TextButton(
-              child: const Text('Cancelar'),
               onPressed: () {
                 Navigator.of(context).pop();
               },
+              child: Text('Cancelar', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
             ),
-            TextButton(
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
               child: const Text('Salvar'),
               onPressed: () {
                 if (controller.text.isNotEmpty) {
@@ -119,13 +141,122 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Lógica para navegação
   void _verCaixasSalvas(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => const ApiariosScreen(),
       ),
+    );
+  }
+
+  void _selecionarCaixasParaImpressaoDupla(BuildContext context) async {
+    final historicoService = HistoricoService();
+    _listaDeTodasAsCaixasParaSelecao = await historicoService.getTodasCaixasComLocal();
+
+    if (!context.mounted) return;
+
+    if (_listaDeTodasAsCaixasParaSelecao.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nenhuma caixa criada para selecionar.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _caixasSelecionadasParaImpressaoDupla.clear();
+    });
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext modalContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter modalSetState) {
+            return SizedBox(
+              height: MediaQuery.of(modalContext).size.height * 0.75,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
+                    child: Text(
+                      'Selecione 2 Caixas (${_caixasSelecionadasParaImpressaoDupla.length}/2)',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: _listaDeTodasAsCaixasParaSelecao.isEmpty
+                        ? const Center(child: Text('Nenhuma caixa encontrada.'))
+                        : ListView.builder(
+                      itemCount: _listaDeTodasAsCaixasParaSelecao.length,
+                      itemBuilder: (ctx, index) {
+                        final caixa = _listaDeTodasAsCaixasParaSelecao[index];
+                        final String idCaixa = caixa['id']?.toString() ?? 'ID Desconhecido';
+                        final String localCaixa = caixa['local']?.toString() ?? 'Local não definido';
+                        final isSelected = _caixasSelecionadasParaImpressaoDupla.contains(idCaixa);
+
+                        return CheckboxListTile(
+                          title: Text('Caixa: $idCaixa', style: const TextStyle(fontWeight: FontWeight.w500)),
+                          subtitle: Text('Local: $localCaixa'),
+                          value: isSelected,
+                          onChanged: (bool? selecionado) {
+                            modalSetState(() {
+                              setState(() {
+                                if (selecionado == true) {
+                                  if (_caixasSelecionadasParaImpressaoDupla.length < 2) {
+                                    _caixasSelecionadasParaImpressaoDupla.add(idCaixa);
+                                  } else {
+                                    ScaffoldMessenger.of(modalContext).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Máximo de 2 caixas já selecionadas. Desmarque uma primeiro.'),
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                  }
+                                } else {
+                                  _caixasSelecionadasParaImpressaoDupla.remove(idCaixa);
+                                }
+                              });
+                            });
+                          },
+                          controlAffinity: ListTileControlAffinity.leading,
+                        );
+                      },
+                    ),
+                  ),
+                  const Divider(),
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.qr_code_2_outlined),
+                      label: const Text('Gerar QR Codes Empilhados'),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
+                        textStyle: const TextStyle(fontSize: 16),
+                      ),
+                      onPressed: _caixasSelecionadasParaImpressaoDupla.length == 2
+                          ? () {
+                        Navigator.pop(modalContext);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => GerarDoisQrCodesScreen(
+                              idCaixa1: _caixasSelecionadasParaImpressaoDupla.first,
+                              idCaixa2: _caixasSelecionadasParaImpressaoDupla.last,
+                            ),
+                          ),
+                        );
+                      }
+                          : null,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -137,18 +268,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (codigoLido != null && codigoLido.isNotEmpty && context.mounted) {
       final historicoService = HistoricoService();
-      final todasAsCaixas = await historicoService.getTodasCaixasComLocal();
+      final List<Map<String, dynamic>> todasAsCaixas = await historicoService.getTodasCaixasComLocal();
 
       final caixaEncontrada = todasAsCaixas.firstWhere(
-            (caixa) => caixa['id'] == codigoLido,
-        orElse: () => <String, String>{},
+            (caixa) => caixa['id']?.toString() == codigoLido,
+        orElse: () => <String, dynamic>{},
       );
 
       if (caixaEncontrada.isNotEmpty && context.mounted) {
-        final String localDaCaixaParaNavegar = caixaEncontrada['local']?.isNotEmpty == true
-            ? caixaEncontrada['local']!
-            : 'Local Desconhecido';
-
+        final String localDaCaixaParaNavegar = caixaEncontrada['local']?.toString() ?? 'Local Desconhecido';
         _navegarParaCaixa(context, codigoLido, localDaCaixaParaNavegar);
       } else if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -164,6 +292,12 @@ class _HomeScreenState extends State<HomeScreen> {
       _MenuItem("Ler Caixa", Icons.qr_code_scanner, Colors.deepOrange, () => _lerQRCode(context)),
       _MenuItem("Nova Caixa", Icons.add_box_outlined, Colors.blue, () => _criarNovaCaixa(context)),
       _MenuItem("Ver Colmeias", Icons.folder_open_outlined, Colors.purple, () => _verCaixasSalvas(context)),
+      _MenuItem(
+        "Imprimir 2 QR Codes",
+        Icons.qr_code_2_sharp,
+        Colors.teal,
+            () => _selecionarCaixasParaImpressaoDupla(context),
+      ),
     ];
 
     return Scaffold(
@@ -172,11 +306,14 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Center(
         child: Wrap(
           alignment: WrapAlignment.center,
-          spacing: 16,
-          runSpacing: 16,
+          spacing: 12,
+          runSpacing: 12,
           children: menuItens.map((item) {
+            double buttonWidth = (MediaQuery.of(context).size.width / 2) - (12 * 1.5);
+            if (buttonWidth < 100) buttonWidth = 100;
+
             return SizedBox(
-              width: 100,
+              width: buttonWidth,
               height: 100,
               child: ElevatedButton(
                 onPressed: item.acao,
@@ -196,6 +333,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       item.titulo,
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 12, color: Colors.white),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -208,8 +347,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ... Código das outras classes (ScannerScreen, etc.) ...
-// A classe _MenuItem deve estar no final do arquivo, como estava originalmente.
 class _MenuItem {
   final String titulo;
   final IconData icone;
@@ -244,11 +381,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
         controller: cameraController,
         onDetect: (capture) {
           if (_codigoLido || !mounted) return;
-
           final barcodes = capture.barcodes;
           if (barcodes.isNotEmpty) {
             final String? codigo = barcodes.first.rawValue;
-
             if (codigo != null) {
               setState(() {
                 _codigoLido = true;

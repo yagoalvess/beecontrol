@@ -18,7 +18,6 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
   final List<String> _locaisPreDefinidos = const [
     'Apiário Central',
     'Apiário do Sul',
-    'Apiário da Fazenda Nova',
     'Apiário Experimental',
     'Apiário da Mata',
   ];
@@ -76,7 +75,7 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
     await historicoService.removerCaixa(caixaId);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Historico da Colmeia excluído com sucesso!')),
+      const SnackBar(content: Text('Histórico da Colmeia excluído com sucesso!')),
     );
     _fetchCaixas();
   }
@@ -139,46 +138,66 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(title),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            title,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (predefinedOptions != null && predefinedOptions.isNotEmpty) ...[
                   ...predefinedOptions.map((option) {
-                    return ListTile(
-                      title: Text(option),
-                      onTap: () {
-                        Navigator.of(context).pop(option);
-                      },
+                    return Card(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: ListTile(
+                        leading: Icon(Icons.location_on, color: Theme.of(context).colorScheme.primary),
+                        title: Text(option, style: const TextStyle(fontWeight: FontWeight.w500)),
+                        onTap: () {
+                          Navigator.of(context).pop(option);
+                        },
+                      ),
                     );
                   }).toList(),
-                  const Divider(),
+                  const SizedBox(height: 16),
                 ],
                 TextField(
                   controller: controller,
-                  decoration: InputDecoration(hintText: hintText),
+                  decoration: InputDecoration(
+                    hintText: hintText,
+                    labelText: 'Nome do Local',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    prefixIcon: Icon(Icons.edit_location_alt, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
+                    filled: true,
+                    fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                  ),
                   autofocus: true,
                 ),
               ],
             ),
           ),
           actions: <Widget>[
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop(controller.text);
+              },
+              child: const Text('Salvar'),
+            ),
             TextButton(
-              child: const Text('Cancelar'),
               onPressed: () {
                 Navigator.of(context).pop();
               },
-            ),
-            TextButton(
-              child: const Text('Salvar'),
-              onPressed: () {
-                if (controller.text.isNotEmpty) {
-                  Navigator.of(context).pop(controller.text);
-                } else {
-                  Navigator.of(context).pop();
-                }
-              },
+              child: Text('Cancelar', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
             ),
           ],
         );
@@ -206,7 +225,7 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
                   borderSide: BorderSide.none,
                 ),
                 filled: true,
-                fillColor: Colors.grey[200],
+                fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
               ),
             ),
           ),
@@ -244,7 +263,7 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
                         context: context,
                         builder: (_) => AlertDialog(
                           title: const Text("Excluir Colmeia"),
-                          content: const Text("Tem certeza que deseja excluir todo o histórico dessa colmeia ?"),
+                          content: const Text("Tem certeza que deseja excluir todo o histórico dessa colmeia?"),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.of(context).pop(false),
@@ -296,7 +315,8 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
         onPressed: _criarNovaCaixa,
         label: const Text('NOVA PRODUÇÃO'),
         icon: const Icon(Icons.edit),
-        backgroundColor: Colors.orange,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20.0),
         ),
