@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'caixa_screen.dart';
-import 'gerar_qrcode_screen.dart';
-import 'package:abelhas/services/historico_service.dart';
-import 'apiarios_screen.dart';
-import 'gerar_dois_qr_codes_screen.dart';
+import 'package:abelhas/services/historico_service.dart'; // VERIFIQUE O CAMINHO
+import 'package:abelhas/screens/caixa_screen.dart';
+import 'package:abelhas/screens/gerar_qrcode_screen.dart';
+import 'package:abelhas/screens/apiarios_screen.dart';
+import 'package:abelhas/screens/gerar_dois_qr_codes_screen.dart';
+import 'package:abelhas/screens/relatorio_por_apiario_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -80,7 +81,13 @@ class _HomeScreenState extends State<HomeScreen> {
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (predefinedOptions.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: Text("Ou selecione um local existente:", style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  ),
                 ...predefinedOptions.map((option) {
                   return Card(
                     margin: const EdgeInsets.symmetric(vertical: 4),
@@ -95,20 +102,31 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   );
                 }).toList(),
-                const SizedBox(height: 16),
+                if (predefinedOptions.isNotEmpty) const SizedBox(height: 16),
+                if (predefinedOptions.isNotEmpty)
+                  Row(
+                    children: <Widget>[
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: Text("OU", style: TextStyle(color: Theme.of(context).colorScheme.outline)),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                if (predefinedOptions.isNotEmpty) const SizedBox(height: 16),
                 TextField(
                   controller: controller,
                   decoration: InputDecoration(
-                    hintText: hintText,
-                    labelText: 'Nome do Local',
+                    hintText: 'Ex: Apiário da Fazenda',
+                    labelText: 'Novo Nome do Local',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                     prefixIcon: Icon(Icons.edit_location_alt, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
                     filled: true,
-                    fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                   ),
-                  autofocus: true,
                 ),
               ],
             ),
@@ -126,12 +144,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 backgroundColor: Theme.of(context).colorScheme.primary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              child: const Text('Salvar'),
+              child: const Text('Salvar Novo'),
               onPressed: () {
-                if (controller.text.isNotEmpty) {
-                  Navigator.of(context).pop(controller.text);
+                if (controller.text.trim().isNotEmpty) {
+                  Navigator.of(context).pop(controller.text.trim());
                 } else {
-                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Por favor, digite o nome do local para criar um novo.')),
+                  );
                 }
               },
             ),
@@ -163,14 +183,17 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    setState(() {
-      _caixasSelecionadasParaImpressaoDupla.clear();
-    });
+    _caixasSelecionadasParaImpressaoDupla.clear();
 
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20.0)),
+      ),
       builder: (BuildContext modalContext) {
+        Set<String> selecaoNoModal = Set.from(_caixasSelecionadasParaImpressaoDupla);
+
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter modalSetState) {
             return SizedBox(
@@ -180,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
                     child: Text(
-                      'Selecione 2 Caixas (${_caixasSelecionadasParaImpressaoDupla.length}/2)',
+                      'Selecione 2 Caixas (${selecaoNoModal.length}/2)',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -194,30 +217,29 @@ class _HomeScreenState extends State<HomeScreen> {
                         final caixa = _listaDeTodasAsCaixasParaSelecao[index];
                         final String idCaixa = caixa['id']?.toString() ?? 'ID Desconhecido';
                         final String localCaixa = caixa['local']?.toString() ?? 'Local não definido';
-                        final isSelected = _caixasSelecionadasParaImpressaoDupla.contains(idCaixa);
+                        final bool isSelected = selecaoNoModal.contains(idCaixa);
 
                         return CheckboxListTile(
                           title: Text('Caixa: $idCaixa', style: const TextStyle(fontWeight: FontWeight.w500)),
                           subtitle: Text('Local: $localCaixa'),
                           value: isSelected,
+                          activeColor: Theme.of(context).primaryColor,
                           onChanged: (bool? selecionado) {
                             modalSetState(() {
-                              setState(() {
-                                if (selecionado == true) {
-                                  if (_caixasSelecionadasParaImpressaoDupla.length < 2) {
-                                    _caixasSelecionadasParaImpressaoDupla.add(idCaixa);
-                                  } else {
-                                    ScaffoldMessenger.of(modalContext).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Máximo de 2 caixas já selecionadas. Desmarque uma primeiro.'),
-                                        duration: Duration(seconds: 2),
-                                      ),
-                                    );
-                                  }
+                              if (selecionado == true) {
+                                if (selecaoNoModal.length < 2) {
+                                  selecaoNoModal.add(idCaixa);
                                 } else {
-                                  _caixasSelecionadasParaImpressaoDupla.remove(idCaixa);
+                                  ScaffoldMessenger.of(modalContext).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Máximo de 2 caixas já selecionadas. Desmarque uma primeiro.'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
                                 }
-                              });
+                              } else {
+                                selecaoNoModal.remove(idCaixa);
+                              }
                             });
                           },
                           controlAffinity: ListTileControlAffinity.leading,
@@ -234,19 +256,27 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size(double.infinity, 50),
                         textStyle: const TextStyle(fontSize: 16),
+                        backgroundColor: Theme.of(context).primaryColor,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
                       ),
-                      onPressed: _caixasSelecionadasParaImpressaoDupla.length == 2
+                      onPressed: selecaoNoModal.length == 2
                           ? () {
+                        setState(() {
+                          _caixasSelecionadasParaImpressaoDupla.clear();
+                          _caixasSelecionadasParaImpressaoDupla.addAll(selecaoNoModal);
+                        });
                         Navigator.pop(modalContext);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => GerarDoisQrCodesScreen(
-                              idCaixa1: _caixasSelecionadasParaImpressaoDupla.first,
-                              idCaixa2: _caixasSelecionadasParaImpressaoDupla.last,
+                        if (context.mounted) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => GerarDoisQrCodesScreen(
+                                idCaixa1: _caixasSelecionadasParaImpressaoDupla.first,
+                                idCaixa2: _caixasSelecionadasParaImpressaoDupla.last,
+                              ),
                             ),
-                          ),
-                        );
+                          );
+                        }
                       }
                           : null,
                     ),
@@ -298,49 +328,79 @@ class _HomeScreenState extends State<HomeScreen> {
         Colors.teal,
             () => _selecionarCaixasParaImpressaoDupla(context),
       ),
+      _MenuItem(
+        "Relatório por Apiário",
+        Icons.analytics_outlined,
+        Colors.lightGreen.shade700,
+            () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const RelatorioPorApiarioScreen()),
+          );
+        },
+      ),
     ];
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(title: const Text('BeeControl')),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      appBar: AppBar(
+        title: const Text('BeeControl'),
+        // =======================================================================
+        // CORES DO APPBAR DA HOMESCREEN ALTERADAS PARA AS CORES DA CAIXASCREEN
+        // =======================================================================
+        backgroundColor: const Color(0xFFFFC107), // Amarelo/Dourado da CaixaScreen
+        foregroundColor: Colors.black87,         // Preto Suave da CaixaScreen
+        // =======================================================================
+      ),
       body: Center(
-        child: Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 12,
-          runSpacing: 12,
-          children: menuItens.map((item) {
-            double buttonWidth = (MediaQuery.of(context).size.width / 2) - (12 * 1.5);
-            if (buttonWidth < 100) buttonWidth = 100;
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 16,
+            runSpacing: 16,
+            children: menuItens.map((item) {
+              double screenWidth = MediaQuery.of(context).size.width;
+              int itemsPerRow = screenWidth > 700 ? 3 : 2;
+              double totalHorizontalPaddingAndSpacing = (16.0 * 2) + ((itemsPerRow - 1) * 16.0);
+              double buttonWidth = (screenWidth - totalHorizontalPaddingAndSpacing) / itemsPerRow;
 
-            return SizedBox(
-              width: buttonWidth,
-              height: 100,
-              child: ElevatedButton(
-                onPressed: item.acao,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: item.cor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  padding: const EdgeInsets.all(8),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(item.icone, size: 28, color: Colors.white),
-                    const SizedBox(height: 6),
-                    Text(
-                      item.titulo,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 12, color: Colors.white),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+              if (buttonWidth < 130) buttonWidth = 130;
+              if (buttonWidth > 200 && itemsPerRow == 2) buttonWidth = 200;
+
+              return SizedBox(
+                width: buttonWidth,
+                height: 120,
+                child: ElevatedButton(
+                  onPressed: item.acao,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: item.cor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
                     ),
-                  ],
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                    elevation: 4,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Icon(item.icone, size: 32, color: Colors.white),
+                      const SizedBox(height: 8),
+                      Text(
+                        item.titulo,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          }).toList(),
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
@@ -376,19 +436,25 @@ class _ScannerScreenState extends State<ScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Ler Caixa')),
+      appBar: AppBar(
+        title: const Text('Ler Caixa'),
+        // PARA MANTER A CONSISTÊNCIA, APLICAMOS AS MESMAS CORES AQUI TAMBÉM
+        backgroundColor: const Color(0xFFFFC107), // Amarelo/Dourado
+        foregroundColor: Colors.black87,         // Preto Suave
+      ),
       body: MobileScanner(
         controller: cameraController,
         onDetect: (capture) {
           if (_codigoLido || !mounted) return;
-          final barcodes = capture.barcodes;
+
+          final List<Barcode> barcodes = capture.barcodes;
           if (barcodes.isNotEmpty) {
             final String? codigo = barcodes.first.rawValue;
-            if (codigo != null) {
+            if (codigo != null && codigo.isNotEmpty) {
               setState(() {
                 _codigoLido = true;
               });
-              Navigator.pop(context, codigo);
+              if (mounted) Navigator.pop(context, codigo);
             }
           }
         },
@@ -396,3 +462,4 @@ class _ScannerScreenState extends State<ScannerScreen> {
     );
   }
 }
+

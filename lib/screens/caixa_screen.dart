@@ -1,11 +1,53 @@
 import 'package:flutter/material.dart';
-import 'package:abelhas/services/historico_service.dart';
+import 'package:abelhas/services/historico_service.dart'; // Assumindo que é usado
+import 'package:intl/intl.dart'; // Usado para DateFormat
+import 'package:abelhas/screens/registrar_producao_screen.dart'; // Assumindo que é usado
+
+// --- Utilitários ---
+Future<bool> showAppConfirmDialog(
+    BuildContext context, {
+      required String title,
+      required String content,
+      String confirmButtonText = 'Excluir',
+      String cancelButtonText = 'Cancelar',
+    }) async {
+  return await showDialog<bool>(
+    context: context,
+    builder: (BuildContext dialogContext) {
+      return AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('Cancelar'), // Aplicado const
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+          ),
+          TextButton(
+            child: Text(
+              confirmButtonText,
+              style: TextStyle( // Não pode ser const por causa de Colors.red.shade700
+                  color: Colors.red.shade700, fontWeight: FontWeight.bold),
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+          ),
+        ],
+      );
+    },
+  ) ??
+      false;
+}
+
+String formatDisplayDate(DateTime? date) {
+  if (date == null) return "N/D";
+  return DateFormat('dd/MM/yyyy').format(date);
+}
+// --- Fim dos Utilitários ---
 
 class CaixaScreen extends StatefulWidget {
   final String caixaId;
   final String localCaixa;
 
-  const CaixaScreen({
+  const CaixaScreen({ // Aplicado const
     super.key,
     required this.caixaId,
     required this.localCaixa,
@@ -15,267 +57,412 @@ class CaixaScreen extends StatefulWidget {
   State<CaixaScreen> createState() => _CaixaScreenState();
 }
 
-class _CaixaScreenState extends State<CaixaScreen> {
-  final HistoricoService _historicoService = HistoricoService(); // Instância do serviço
-  List<Map<String, String>> historico = [];
+class _CaixaScreenState extends State<CaixaScreen>
+    with SingleTickerProviderStateMixin {
+  final HistoricoService _historicoService = HistoricoService(); // Não pode ser const
+  List<Map<String, String>> _historicoItens = [];
   String? _observacaoFixa;
   bool _isLoading = true;
-
-  // --- NOVO ESTADO PARA O LOCAL ATUAL DA CAIXA ---
   late String _localAtualDaCaixa;
+  List<Map<String, dynamic>> _registrosProducaoDaCaixa = [];
 
-  // --- LISTA DE LOCAIS PREDEFINIDOS (mantenha sincronizada com a HomeScreen se usar a mesma) ---
-  final List<String> _locaisPreDefinidos = [
+  Map<String, double> _somaPorCorMelDaCaixa = {};
+  double _totalMelDaCaixa = 0;
+  double _totalGeleiaRealDaCaixa = 0;
+  double _totalPropolisDaCaixa = 0;
+  double _totalCeraDaCaixa = 0;
+  double _totalApitoxinaDaCaixa = 0;
+  DateTime? _dataProducaoMaisAntigaDaCaixa;
+  DateTime? _dataProducaoMaisRecenteDaCaixa;
+
+  // Se esta lista nunca mudar, pode ser const.
+  // Se puder mudar em tempo de execução (mesmo que não mude neste código), não deve ser.
+  // Para este exemplo, vou assumir que é uma lista fixa para esta tela.
+  static const List<String> _locaisPreDefinidos = [ // Aplicado static const
     'Apiário Central',
     'Apiário Morro Alto',
     'Apiário de Suzano',
     'Bosque das Abelhas',
-    // Adicione mais locais conforme necessário
   ];
 
+  late TabController _tabController;
+  int _currentTabIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _localAtualDaCaixa = widget.localCaixa; // Inicializa com o local passado
-    _carregarDadosDaCaixa();
+    _localAtualDaCaixa = widget.localCaixa;
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(_handleTabSelection);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _carregarDadosIniciais();
+      }
+    });
   }
 
-  Future<void> _carregarDadosDaCaixa() async { // Renomeado para seguir convenção
-    setState(() => _isLoading = true);
-    // Não precisamos recarregar o local da caixa do serviço aqui,
-    // pois ele é gerenciado pelo estado _localAtualDaCaixa e atualizado após a edição.
-    final dadosHistorico = await _historicoService.getHistorico(widget.caixaId);
-    final observacaoFixa = await _historicoService.getObservacaoFixa(widget.caixaId);
+  void _handleTabSelection() {
+    if (_tabController.indexIsChanging ||
+        _tabController.index != _currentTabIndex) {
+      if (mounted) {
+        setState(() {
+          _currentTabIndex = _tabController.index;
+        });
+      }
+    }
+  }
 
+  @override
+  void dispose() {
+    _tabController.removeListener(_handleTabSelection);
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _showErrorSnackBar(String message) async {
     if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  Future<void> _carregarDadosEProcessarRelatorio() async {
+    if (!mounted) return;
+    if (!_isLoading) {
       setState(() {
-        historico = dadosHistorico;
-        _observacaoFixa = observacaoFixa;
-        _isLoading = false;
+        _isLoading = true;
       });
     }
-  }
 
-  Future<void> _adicionarEntrada() async { // Renomeado para seguir convenção
-    final descricao = await _inputDescricaoDialog(context, 'Nova Anotação', 'Digite sua anotação aqui...');
-    if (descricao != null && descricao.trim().isNotEmpty) {
-      await _historicoService.adicionarHistorico(widget.caixaId, descricao.trim());
-      _carregarDadosDaCaixa(); // Recarrega apenas histórico e observação
+    try {
+      final results = await Future.wait([
+        _historicoService.getHistorico(widget.caixaId),
+        _historicoService.getObservacaoFixa(widget.caixaId),
+        _historicoService.getRegistrosProducaoDaCaixa(widget.caixaId),
+      ]);
+
+      if (!mounted) return;
+
+      setState(() {
+        _historicoItens = results[0] as List<Map<String, String>>;
+        _observacaoFixa = results[1] as String?;
+        _registrosProducaoDaCaixa = results[2] as List<Map<String, dynamic>>;
+        _processarDadosDeProducaoParaRelatorioLocal(_registrosProducaoDaCaixa);
+      });
+    } catch (e) {
+      _showErrorSnackBar("Erro ao carregar dados: ${e.toString()}");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  Future<void> _gerenciarObservacaoFixa(BuildContext context, {String? textoAtual}) async {
-    final novaObservacao = await _inputDescricaoDialog(
+  Future<void> _carregarDadosIniciais() async {
+    if (mounted && !_isLoading) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+    await _carregarDadosEProcessarRelatorio();
+  }
+
+  void _processarDadosDeProducaoParaRelatorioLocal(
+      List<Map<String, dynamic>> registros) {
+    // Lógica de processamento (sem mudanças diretas para const aqui, pois manipula dados)
+    _somaPorCorMelDaCaixa = {};
+    _totalMelDaCaixa = 0;
+    _totalGeleiaRealDaCaixa = 0;
+    _totalPropolisDaCaixa = 0;
+    _totalCeraDaCaixa = 0;
+    _totalApitoxinaDaCaixa = 0;
+    _dataProducaoMaisAntigaDaCaixa = null;
+    _dataProducaoMaisRecenteDaCaixa = null;
+
+    if (registros.isEmpty) return;
+
+    for (var registro in registros) {
+      try {
+        if (registro['dataProducao'] != null) {
+          DateTime dataAtualRegistro =
+          DateTime.parse(registro['dataProducao'] as String);
+          if (_dataProducaoMaisAntigaDaCaixa == null ||
+              dataAtualRegistro.isBefore(_dataProducaoMaisAntigaDaCaixa!)) {
+            _dataProducaoMaisAntigaDaCaixa = dataAtualRegistro;
+          }
+          if (_dataProducaoMaisRecenteDaCaixa == null ||
+              dataAtualRegistro.isAfter(_dataProducaoMaisRecenteDaCaixa!)) {
+            _dataProducaoMaisRecenteDaCaixa = dataAtualRegistro;
+          }
+        }
+      } catch (e) {
+        // Log error if necessary
+      }
+
+      double qtdMel = (registro['quantidadeMel'] as num?)?.toDouble() ?? 0.0;
+      if (qtdMel > 0) {
+        _totalMelDaCaixa += qtdMel;
+        String cor = registro['corDoMel'] as String? ?? 'Não Especificada';
+        _somaPorCorMelDaCaixa[cor] =
+            (_somaPorCorMelDaCaixa[cor] ?? 0) + qtdMel;
+      }
+      _totalGeleiaRealDaCaixa +=
+          (registro['quantidadeGeleiaReal'] as num?)?.toDouble() ?? 0.0;
+      _totalPropolisDaCaixa +=
+          (registro['quantidadePropolis'] as num?)?.toDouble() ?? 0.0;
+      _totalCeraDaCaixa +=
+          (registro['quantidadeCera'] as num?)?.toDouble() ?? 0.0;
+      _totalApitoxinaDaCaixa +=
+          (registro['quantidadeApitoxina'] as num?)?.toDouble() ?? 0.0;
+    }
+  }
+
+  Future<void> _handleItemAction(Future<void> Function() serviceCall) async {
+    // Função wrapper para DRY em chamadas de serviço + recarga
+    await serviceCall();
+    if (mounted) { // Verifica mounted após a chamada de serviço, antes de recarregar
+      _carregarDadosEProcessarRelatorio();
+    }
+  }
+
+
+  Future<void> _adicionarAnotacaoComRecarga() async {
+    final descricao = await _showInputDescricaoDialog(
+        context, 'Nova Anotação', 'Digite sua anotação aqui...');
+    if (descricao != null && descricao.trim().isNotEmpty) {
+      await _handleItemAction(() => _historicoService.adicionarHistorico(widget.caixaId, descricao.trim()));
+    }
+  }
+
+  Future<void> _navegarParaRegistrarProducaoComRecarga() async {
+    final bool? resultado = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RegistrarProducaoScreen( // Pode ser const se RegistrarProducaoScreen for
+          caixaId: widget.caixaId,
+          registroProducaoExistente: null,
+        ),
+      ),
+    );
+    if (resultado == true && mounted) {
+      _carregarDadosEProcessarRelatorio();
+    }
+  }
+
+  Future<void> _navegarParaEditarProducaoComRecarga(
+      Map<String, dynamic> producaoParaEditar) async {
+    final bool? resultado = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RegistrarProducaoScreen( // Pode ser const se RegistrarProducaoScreen for
+          caixaId: widget.caixaId,
+          registroProducaoExistente: producaoParaEditar,
+        ),
+      ),
+    );
+    if (resultado == true && mounted) {
+      _carregarDadosEProcessarRelatorio();
+    }
+  }
+
+  Future<void> _gerenciarObservacaoFixaComRecarga(BuildContext context,
+      {String? textoAtual}) async {
+    final novaObservacao = await _showInputDescricaoDialog(
       context,
       textoAtual == null ? 'Adicionar Observação' : 'Editar Observação',
       'Digite sua observação fixa aqui...',
       initialText: textoAtual,
     );
-
-    // Salva apenas se houver uma nova observação (mesmo que seja string vazia para limpar)
-    // ou se a observação inicial era nula e agora temos algo.
     if (novaObservacao != null) {
-      await _historicoService.salvarObservacaoFixa(widget.caixaId, novaObservacao.trim().isEmpty ? null : novaObservacao.trim());
-      _carregarDadosDaCaixa(); // Recarrega apenas histórico e observação
+      await _handleItemAction(() => _historicoService.salvarObservacaoFixa(widget.caixaId, novaObservacao.trim().isEmpty ? null : novaObservacao.trim()));
     }
   }
 
-  Future<void> _excluirObservacaoFixa() async {
-    await _historicoService.salvarObservacaoFixa(widget.caixaId, null);
-    _carregarDadosDaCaixa(); // Recarrega apenas histórico e observação
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Observação fixa removida.')),
-      );
+  Future<void> _excluirObservacaoFixaComRecarga() async {
+    final bool confirmarExclusao = await showAppConfirmDialog(
+      context,
+      title: 'Confirmar Exclusão',
+      content: 'Tem certeza que deseja excluir esta observação fixa?',
+    );
+
+    if (confirmarExclusao) {
+      await _handleItemAction(() => _historicoService.salvarObservacaoFixa(widget.caixaId, null));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Observação fixa removida.'))); // Aplicado const
+      }
     }
   }
 
-  // Renomeado para _inputDescricaoDialog para clareza
-  Future<String?> _inputDescricaoDialog(
-      BuildContext context,
-      String title,
-      String hintText, {
-        String? initialText,
-      }) async {
-    TextEditingController controller = TextEditingController(text: initialText);
+  Future<String?> _showInputDescricaoDialog(
+      BuildContext context, String title, String hintText,
+      {String? initialText}) async {
+    TextEditingController controller =
+    TextEditingController(text: initialText);
     return await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
         title: Text(title),
-        content: SizedBox(
-          height: 120,
+        content: SizedBox( // Pode ser const se altura for fixa e child for const
+          height: 120.0,
           child: TextField(
             controller: controller,
             autofocus: true,
             maxLines: null,
             expands: true,
             textAlignVertical: TextAlignVertical.top,
-            decoration: InputDecoration(
-              labelText: hintText,
-              hintText: hintText,
-              border: const OutlineInputBorder(),
-              alignLabelWithHint: true,
-            ),
+            decoration: InputDecoration( // Pode ter partes const
+                labelText: hintText,
+                hintText: hintText,
+                border: const OutlineInputBorder(), // Aplicado const
+                alignLabelWithHint: true),
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar')), // Aplicado const
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Salvar'),
-          ),
+              onPressed: () => Navigator.pop(context, controller.text),
+              child: const Text('Salvar')), // Aplicado const
         ],
       ),
     );
   }
 
-  // --- NOVA FUNÇÃO PARA EDITAR O LOCAL DA CAIXA ---
-  Future<void> _editarLocalCaixa() async {
+  Future<void> _editarLocalCaixaComRecarga() async {
     final novoLocal = await _showSelectOrInputDialog(
-      context,
-      'Editar Local da Caixa',
-      'Novo nome do local ou selecione',
-      _localAtualDaCaixa, // Passa o local atual para pré-preenchimento
-      _locaisPreDefinidos,
-    );
-
-    if (novoLocal != null && novoLocal.trim().isNotEmpty && novoLocal.trim() != _localAtualDaCaixa) {
-      final sucesso = await _historicoService.atualizarLocalDaCaixa(widget.caixaId, novoLocal.trim());
-      if (sucesso && mounted) {
-        setState(() {
-          _localAtualDaCaixa = novoLocal.trim(); // Atualiza o local na UI desta tela
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Local atualizado para: $_localAtualDaCaixa')),
-        );
-        // Informa a tela anterior que uma atualização ocorreu, para que ela possa recarregar.
-        Navigator.pop(context, true); // Envia 'true' de volta
-      } else if (!sucesso && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro ao atualizar o local. Tente novamente.')),
-        );
-      }
-    } else if (novoLocal != null && novoLocal.trim() == _localAtualDaCaixa) {
-      // Nenhuma mudança, apenas fecha o diálogo
+        context,
+        'Editar Local da Caixa',
+        'Novo nome do local ou selecione',
+        _localAtualDaCaixa,
+        _locaisPreDefinidos);
+    if (novoLocal == null || novoLocal.trim().isEmpty) return;
+    if (novoLocal.trim() == _localAtualDaCaixa) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('O local não foi alterado.')),
-        );
+            const SnackBar(content: Text('O local não foi alterado.'))); // Aplicado const
+      }
+      return;
+    }
+
+    // Não usa _handleItemAction aqui porque a atualização do estado local (_localAtualDaCaixa)
+    // é síncrona e acontece antes do recarregamento total.
+    final sucesso = await _historicoService.atualizarLocalDaCaixa(
+        widget.caixaId, novoLocal.trim());
+    if (!mounted) return;
+
+    if (sucesso) {
+      setState(() {
+        _localAtualDaCaixa = novoLocal.trim();
+      });
+      // _carregarDadosEProcessarRelatorio(); // Opcional, como discutido
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar( // Não pode ser const devido a _localAtualDaCaixa
+            content: Text('Local atualizado para: $_localAtualDaCaixa')));
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar( // Aplicado const
+            content: Text('Erro ao atualizar o local. Tente novamente.')));
       }
     }
-    // Se novoLocal for null (cancelado), não faz nada.
   }
 
-  // --- NOVO DIÁLOGO PARA SELECIONAR OU INSERIR LOCAL (similar ao da HomeScreen) ---
   Future<String?> _showSelectOrInputDialog(
       BuildContext context,
       String title,
       String hintText,
       String valorAtual,
-      List<String> predefinedOptions,
-      ) async {
+      List<String> predefinedOptions) async {
     TextEditingController controller = TextEditingController(text: valorAtual);
-    String? localSelecionadoOpcao = predefinedOptions.contains(valorAtual) ? valorAtual : null;
-
-    // Adiciona o valor atual às opções se ele não estiver lá, para o RadioListTile
+    String? localSelecionadoOpcao =
+    predefinedOptions.contains(valorAtual) ? valorAtual : null;
     List<String> displayOptions = List.from(predefinedOptions);
     if (!displayOptions.contains(valorAtual) && valorAtual.isNotEmpty) {
-      displayOptions.add(valorAtual); // Adiciona para permitir seleção se for um valor customizado
-      displayOptions.sort(); // Opcional: mantém ordenado
+      displayOptions.add(valorAtual);
+      displayOptions.sort();
     }
-
-
     return showDialog<String>(
       context: context,
-      barrierDismissible: false, // Usuário deve usar os botões
+      barrierDismissible: false,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: Text(title),
-          content: StatefulBuilder( // Para atualizar o RadioListTile e o TextField
-            builder: (context, setStateDialog) {
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    TextField(
-                      controller: controller,
-                      decoration: InputDecoration(
-                        labelText: 'Nome do Local',
-                        hintText: hintText,
-                        border: const OutlineInputBorder(),
+          content: StatefulBuilder(
+              builder: (context, setStateDialog) {
+                return SingleChildScrollView( // Pode ser const se child for const
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      TextField(
+                        controller: controller,
+                        decoration: InputDecoration(
+                            labelText: 'Nome do Local',
+                            hintText: hintText,
+                            border: const OutlineInputBorder()), // Aplicado const
+                        autofocus: true,
+                        onChanged: (text) {
+                          setStateDialog(() {
+                            localSelecionadoOpcao =
+                            predefinedOptions.contains(text) ? text : null;
+                          });
+                        },
                       ),
-                      autofocus: true,
-                      onChanged: (text) {
-                        // Se o usuário digitar, desmarca a seleção de opção pré-definida
-                        // a menos que o texto digitado corresponda a uma opção
-                        setStateDialog(() {
-                          if (predefinedOptions.contains(text)) {
-                            localSelecionadoOpcao = text;
-                          } else {
-                            localSelecionadoOpcao = null;
-                          }
-                        });
-                      },
-                    ),
-                    if (predefinedOptions.isNotEmpty) ...[
-                      const Padding(
-                        padding: EdgeInsets.only(top: 16.0, bottom: 8.0),
-                        child: Text("Ou selecione um local existente:", style: TextStyle(fontSize: 14)),
-                      ),
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: MediaQuery.of(context).size.height * 0.25, // Limita altura
+                      if (predefinedOptions.isNotEmpty) ...[
+                        const Padding( // Aplicado const
+                            padding: EdgeInsets.only(top: 16.0, bottom: 8.0),
+                            child: Text("Ou selecione um local existente:",
+                                style: TextStyle(fontSize: 14.0))), // Pode ser const
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                              maxHeight: MediaQuery.of(context).size.height * 0.25),
+                          child: ListView.builder( // Não pode ser const devido a itemCount e itemBuilder
+                            shrinkWrap: true,
+                            itemCount: displayOptions.length,
+                            itemBuilder: (context, index) {
+                              final option = displayOptions[index];
+                              return RadioListTile<String>( // Não pode ser const devido a groupValue e onChanged
+                                title: Text(option),
+                                value: option,
+                                groupValue: localSelecionadoOpcao,
+                                onChanged: (String? value) {
+                                  setStateDialog(() {
+                                    localSelecionadoOpcao = value;
+                                    if (value != null) controller.text = value;
+                                  });
+                                },
+                                dense: true,
+                                contentPadding: EdgeInsets.zero, // Aplicado const
+                              );
+                            },
+                          ),
                         ),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: displayOptions.length,
-                          itemBuilder: (context, index) {
-                            final option = displayOptions[index];
-                            return RadioListTile<String>(
-                              title: Text(option),
-                              value: option,
-                              groupValue: localSelecionadoOpcao,
-                              onChanged: (String? value) {
-                                setStateDialog(() {
-                                  localSelecionadoOpcao = value;
-                                  if (value != null) {
-                                    controller.text = value; // Atualiza o TextField
-                                  }
-                                });
-                              },
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                            );
-                          },
-                        ),
-                      ),
+                      ],
                     ],
-                  ],
-                ),
-              );
-            },
-          ),
+                  ),
+                );
+              }),
           actions: <Widget>[
             TextButton(
-              child: const Text('Cancelar'),
-              onPressed: () {
-                Navigator.of(dialogContext).pop(); // Retorna null
-              },
-            ),
+                child: const Text('Cancelar'), // Aplicado const
+                onPressed: () => Navigator.of(dialogContext).pop()),
             ElevatedButton(
-              child: const Text('Salvar'),
+              child: const Text('Salvar'), // Aplicado const
               onPressed: () {
                 if (controller.text.trim().isNotEmpty) {
                   Navigator.of(dialogContext).pop(controller.text.trim());
-                } else {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    const SnackBar(content: Text('O nome do local não pode ser vazio.')),
-                  );
+                } else if (mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(const SnackBar( // Aplicado const
+                      content: Text('O nome do local não pode ser vazio.')));
                 }
               },
             ),
@@ -285,121 +472,160 @@ class _CaixaScreenState extends State<CaixaScreen> {
     );
   }
 
+  Widget _buildOutroProdutoRelatorioCaixa(
+      String nome, double total, String unidade) {
+    if (total <= 0) return const SizedBox.shrink(); // Aplicado const
+    return Card( // Não pode ser const devido ao child
+      elevation: 1.5,
+      margin: const EdgeInsets.symmetric(vertical: 6.0), // Aplicado const
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0), // Aplicado const
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(nome,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+            Text('${total.toStringAsFixed(2)} $unidade',
+                style:
+                const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)), // Aplicado const
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppBarTitle() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+            'Caixa ${widget.caixaId.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0')}',
+            style: const TextStyle( // Aplicado const
+                fontWeight: FontWeight.bold,
+                fontSize: 18.0,
+                color: Colors.black87)),
+        const SizedBox(height: 4.0), // Aplicado const
+        Row(children: [
+          const Icon(Icons.location_on, size: 18.0, color: Colors.black54), // Aplicado const
+          const SizedBox(width: 4.0), // Aplicado const
+          Expanded(
+              child: Text(_localAtualDaCaixa, // Não pode ser const
+                  style: const TextStyle(fontSize: 14.0, color: Colors.black54), // Aplicado const
+                  overflow: TextOverflow.ellipsis)),
+        ]),
+      ],
+    );
+  }
+
+  Widget? _buildFloatingActionButton() {
+    if (_currentTabIndex == 0) {
+      return FloatingActionButton.extended(
+        key: const ValueKey('fab_anotar'), // Aplicado const
+        backgroundColor: const Color(0xFFFFC107), // Aplicado const
+        foregroundColor: Colors.black87,
+        onPressed: _adicionarAnotacaoComRecarga,
+        icon: const Icon(Icons.add_comment_outlined), // Aplicado const
+        label: const Text('Anotar'), // Aplicado const
+        shape:
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
+      );
+    } else if (_currentTabIndex == 1) {
+      return FloatingActionButton.extended(
+        key: const ValueKey('fab_producao'), // Aplicado const
+        backgroundColor: Colors.green.shade600,
+        foregroundColor: Colors.white,
+        onPressed: _navegarParaRegistrarProducaoComRecarga,
+        icon: const Icon(Icons.eco_outlined), // Aplicado const
+        label: const Text('Nova Produção'), // Aplicado const
+        shape:
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
+      );
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F9F9),
+      backgroundColor: const Color(0xFFF9F9F9), // Aplicado const
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFC107),
+        backgroundColor: const Color(0xFFFFC107), // Aplicado const
         foregroundColor: Colors.black87,
-        elevation: 2,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Caixa ${widget.caixaId}',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.location_on, size: 18, color: Colors.black54),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    _localAtualDaCaixa, // --- USA O ESTADO LOCAL ATUALIZADO ---
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.black54,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        // --- BOTÃO DE AÇÕES COM EDIÇÃO DE LOCAL ---
+        elevation: 2.0,
+        title: _buildAppBarTitle(),
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit_location_alt_outlined),
-            onPressed: _editarLocalCaixa,
-            tooltip: 'Editar Local da Caixa',
-          ),
+              icon: const Icon(Icons.edit_location_alt_outlined), // Aplicado const
+              onPressed: _editarLocalCaixaComRecarga,
+              tooltip: 'Editar Local da Caixa'),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFFFC107))) // Aplicado const
           : Column(
         children: [
-          // === Seção de Observação Fixa ===
+          // Observação Fixa
           if (_observacaoFixa != null && _observacaoFixa!.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0), // Aplicado const
               child: Dismissible(
                 key: Key('observacao-fixa-${widget.caixaId}'),
                 direction: DismissDirection.endToStart,
-                background: Container(
+                background: Container( // Pode ter partes const
                   decoration: BoxDecoration(
-                    color: Colors.redAccent,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                      color: Colors.redAccent.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(12.0)),
                   alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: const Icon(Icons.delete_outline, color: Colors.white),
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0), // Aplicado const
+                  child: const Column( // Aplicado const
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.delete_sweep_outlined,
+                            color: Colors.white, size: 26),
+                        Text("Excluir",
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12))
+                      ]),
                 ),
-                confirmDismiss: (_) async {
-                  return await showDialog(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      title: const Text("Excluir Observação"),
-                      content: const Text("Tem certeza que deseja excluir esta observação?"),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(false),
-                          child: const Text("Cancelar"),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(true),
-                          child: const Text("Excluir", style: TextStyle(color: Colors.red)),
-                        ),
-                      ],
-                    ),
-                  );
+                confirmDismiss: (_) async =>
+                await showAppConfirmDialog(
+                  context,
+                  title: 'Confirmar Exclusão',
+                  content:
+                  'Tem certeza que deseja excluir esta observação fixa?',
+                ),
+                onDismissed: (_) {
+                  _excluirObservacaoFixaComRecarga();
                 },
-                onDismissed: (_) async {
-                  _excluirObservacaoFixa();
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(12),
+                child: Container( // Não pode ser const devido ao child e GestureDetector
+                  padding: const EdgeInsets.all(12.0), // Aplicado const
                   decoration: BoxDecoration(
-                    color: Colors.red.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.red.shade400),
-                  ),
+                      color: Colors.red.shade100,
+                      borderRadius: BorderRadius.circular(12.0),
+                      border: Border.all(color: Colors.red.shade400)),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.push_pin, color: Colors.red, size: 24),
-                      const SizedBox(width: 8),
+                      Icon(Icons.report_problem_outlined,
+                          color: Colors.red.shade700, size: 24.0),
+                      const SizedBox(width: 8.0), // Aplicado const
                       Expanded(
-                        child: Text(
-                          _observacaoFixa!,
-                          style: TextStyle(
-                            color: Colors.red.shade900,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
+                          child: Text(_observacaoFixa!, // Não pode ser const
+                              style: TextStyle(
+                                  color: Colors.red.shade900,
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 14.5))),
                       GestureDetector(
-                        onTap: () => _gerenciarObservacaoFixa(context, textoAtual: _observacaoFixa),
-                        child: const Icon(Icons.edit, color: Colors.red, size: 24),
-                      ),
+                          onTap: () => _gerenciarObservacaoFixaComRecarga(
+                              context,
+                              textoAtual: _observacaoFixa),
+                          child: Icon(Icons.edit_note_rounded,
+                              color: Colors.red.shade800, size: 24.0)),
                     ],
                   ),
                 ),
@@ -407,126 +633,346 @@ class _CaixaScreenState extends State<CaixaScreen> {
             )
           else
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: OutlinedButton.icon(
-                onPressed: () => _gerenciarObservacaoFixa(context),
-                icon: const Icon(Icons.push_pin_outlined), // Ícone alterado para diferenciação
-                label: const Text('Adicionar Observação Fixa'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.grey.shade700, // Cor mais suave
-                  side: BorderSide(color: Colors.grey.shade400),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 4.0), // Aplicado const
+              child: SizedBox(
+                width: double.infinity,
+                height: 40,
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      _gerenciarObservacaoFixaComRecarga(context),
+                  icon: const Icon(Icons.push_pin_outlined, size: 20), // Aplicado const
+                  label: const Text('Adicionar Observação Fixa', // Aplicado const
+                      style: TextStyle(fontSize: 14)), // Aplicado const
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.grey.shade700,
+                      side: BorderSide(color: Colors.grey.shade300),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10.0))),
                 ),
               ),
             ),
+          TabBar(
+            controller: _tabController,
+            labelColor: Colors.black87,
+            unselectedLabelColor: Colors.black54,
+            indicatorColor: const Color(0xFFFFC107), // Aplicado const
+            tabs: const [ // Aplicado const
+              Tab(icon: Icon(Icons.notes_rounded), text: 'Anotações'),
+              Tab(icon: Icon(Icons.eco_outlined), text: 'Produção'),
+              Tab(icon: Icon(Icons.insights_rounded), text: 'Relatório'),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [ // Os children não podem ser const pois são métodos que constroem widgets dinamicamente
+                _buildAnotacoesView(),
+                _buildProducaoView(),
+                _buildRelatorioCaixaView(),
+              ],
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: _buildFloatingActionButton(),
+    );
+  }
 
-          // === Seção de Histórico (Lista de Anotações) ===
-          if (historico.isEmpty && !_isLoading) // Adicionado !_isLoading para evitar mostrar "nenhuma anotação" durante o carregamento
-            Expanded(
-              child: Center(
+  // --- VIEW PARA ANOTAÇÕES ---
+  Widget _buildAnotacoesView() {
+    if (_historicoItens.isEmpty && !_isLoading) {
+      return const Center( // Aplicado const
+        child: Padding(
+          padding: EdgeInsets.all(20.0),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.forum_outlined, size: 60.0, color: Colors.grey), // Colors.grey.shade400 não é const
+            SizedBox(height: 12.0),
+            Text('Nenhuma anotação encontrada.', style: TextStyle(fontSize: 16.0, color: Colors.black54)),
+            SizedBox(height: 6.0),
+            Text('Toque no botão "Anotar" para adicionar a primeira.', style: TextStyle(fontSize: 14.0, color: Colors.black45), textAlign: TextAlign.center),
+          ]),
+        ),
+      );
+    }
+    return ListView.builder(
+      itemCount: _historicoItens.length,
+      padding: const EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 80.0), // Aplicado const
+      itemBuilder: (_, index) {
+        final item = _historicoItens[index];
+        final String itemKey = '${widget.caixaId}-hist-$index-${item['data']}-${item['hora']}';
+        return Dismissible(
+          key: Key(itemKey),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            decoration: BoxDecoration(
+                color: Colors.redAccent.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(12.0)),
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.symmetric(horizontal: 20.0), // Aplicado const
+            child: const Column( // Aplicado const
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.delete_sweep_outlined, color: Colors.white, size: 26),
+                  Text("Excluir", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))
+                ]),
+          ),
+          confirmDismiss: (_) async => await showAppConfirmDialog(
+            context,
+            title: "Excluir Anotação",
+            content: "Tem certeza que deseja excluir esta anotação?",
+          ),
+          onDismissed: (_) async {
+            // Usando _handleItemAction para DRY
+            await _handleItemAction(() => _historicoService.removerHistorico(widget.caixaId, index));
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anotação excluída'))); // Aplicado const
+            }
+          },
+          child: Card(
+            color: Colors.white,
+            elevation: 1.5,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10.0),
+                side: BorderSide(color: Colors.grey.shade200, width: 0.5)),
+            margin: const EdgeInsets.symmetric(vertical: 4.5), // Aplicado const
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0), // Aplicado const
+              title: Text(item['descricao'] ?? 'Sem descrição',
+                  style: const TextStyle(fontSize: 15.0, fontWeight: FontWeight.w500, color: Colors.black87)), // Aplicado const
+              subtitle: Text('${item['data']} às ${item['hora']}',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12.0)),
+              leading: Icon(Icons.notes_rounded, color: Colors.amber.shade600, size: 28),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // --- VIEW PARA PRODUÇÃO ---
+  Widget _buildProducaoView() {
+    if (_registrosProducaoDaCaixa.isEmpty && !_isLoading) {
+      return const Center( // Aplicado const
+        child: Padding(
+          padding: EdgeInsets.all(20.0),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.eco_outlined, size: 60.0, color: Colors.grey), // Colors.grey.shade400 não é const
+            SizedBox(height: 12.0),
+            Text('Nenhum registro de produção.', style: TextStyle(fontSize: 16.0, color: Colors.black54)),
+            SizedBox(height: 6.0),
+            Text('Use o botão "Nova Produção" abaixo para adicionar.', style: TextStyle(fontSize: 14.0, color: Colors.black45), textAlign: TextAlign.center),
+          ]),
+        ),
+      );
+    }
+    return ListView.builder(
+      itemCount: _registrosProducaoDaCaixa.length,
+      padding: const EdgeInsets.fromLTRB(0.0, 8.0, 0.0, 80.0), // Aplicado const
+      itemBuilder: (context, index) {
+        final producaoItem = _registrosProducaoDaCaixa[index];
+        return _buildRegistroProducaoCard(producaoItem);
+      },
+    );
+  }
+
+  Widget _buildRegistroProducaoCard(Map<String, dynamic> producao) {
+    String dataFormatada = "Data não informada";
+    if (producao['dataProducao'] != null) {
+      try {
+        dataFormatada = DateFormat('dd/MM/yyyy').format(DateTime.parse(producao['dataProducao']));
+      } catch (e) { /* silent */ }
+    }
+
+    Widget buildDetalheItem(String label, String? value, {bool isMel = false, String? corMel}) {
+      if (value == null || value.isEmpty || value == "0.0" || value == "0") return const SizedBox.shrink(); // Aplicado const
+      String textoFinal = value;
+      if (isMel) {
+        textoFinal = (corMel != null && corMel.isNotEmpty) ? '$corMel ($value)' : '$value (cor não especificada)';
+      }
+      return Padding(
+        padding: const EdgeInsets.only(top: 6.0, bottom: 2.0), // Aplicado const
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('$label: ', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: Colors.grey.shade700)),
+            Expanded(child: Text(textoFinal, style: const TextStyle(fontSize: 14.5, color: Colors.black87), softWrap: true)), // Aplicado const
+          ],
+        ),
+      );
+    }
+
+    List<Widget> childrenDetalhes = [
+      buildDetalheItem('Mel', producao['quantidadeMel']?.toString(), isMel: true, corMel: producao['corDoMel']?.toString()),
+      buildDetalheItem('Geleia Real', producao['quantidadeGeleiaReal']?.toString() != null ? '${producao['quantidadeGeleiaReal']}g' : null),
+      buildDetalheItem('Própolis', producao['quantidadePropolis']?.toString() != null ? '${producao['quantidadePropolis']}g/mL' : null),
+      buildDetalheItem('Cera', producao['quantidadeCera']?.toString() != null ? '${producao['quantidadeCera']}kg/placas' : null),
+      buildDetalheItem('Apitoxina', producao['quantidadeApitoxina']?.toString() != null ? '${producao['quantidadeApitoxina']}g/coletor' : null),
+    ];
+    childrenDetalhes.removeWhere((widget) => widget is SizedBox && widget.height == 0 && widget.width == 0);
+
+    final String producaoId = producao['producaoId']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString();
+
+    return Dismissible(
+      key: Key('producao_${widget.caixaId}_$producaoId'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.9), borderRadius: BorderRadius.circular(10.0)),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 20.0), // Aplicado const
+        child: const Column( // Aplicado const
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.delete_sweep_outlined, color: Colors.white, size: 26),
+              Text("Excluir", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+            ]),
+      ),
+      confirmDismiss: (direction) async => await showAppConfirmDialog(
+        context,
+        title: 'Confirmar Exclusão',
+        content: 'Tem certeza que deseja excluir este registro de produção?',
+      ),
+      onDismissed: (direction) {
+        if (producao['producaoId'] != null) {
+          _handleItemAction(() => _historicoService.removerRegistroProducao(widget.caixaId, producao['producaoId'] as String)).then((_) {
+            // O then é opcional aqui, mas pode ser usado para feedback específico APÓS a recarga.
+            // ASnackBar de sucesso/falha seria melhor dentro do _handleItemAction se quisermos feedback antes da recarga.
+            // Para simplificar, o feedback principal já é dado dentro da chamada original.
+          });
+        } else {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não foi possível excluir: ID da produção inválido.'))); // Aplicado const
+          _carregarDadosEProcessarRelatorio();
+        }
+      },
+      child: Card(
+        color: Colors.white,
+        elevation: 2.0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0), side: BorderSide(color: Colors.green.shade300, width: 1.0)),
+        margin: const EdgeInsets.symmetric(vertical: 7.0, horizontal: 10.0), // Aplicado const
+        child: InkWell(
+          onTap: () {
+            if (producao['producaoId'] != null) {
+              _navegarParaEditarProducaoComRecarga(producao);
+            } else {
+              if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não é possível editar: ID da produção não encontrado.'))); // Aplicado const
+            }
+          },
+          borderRadius: BorderRadius.circular(12.0),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0), // Aplicado const
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Produção de $dataFormatada',
+                  style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold, color: Colors.green.shade800),
+                ),
+                const SizedBox(height: 10.0), // Aplicado const
+                if (childrenDetalhes.isNotEmpty)
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: childrenDetalhes)
+                else
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4.0), // Aplicado const
+                    child: Text('Nenhum produto registrado para esta data.', style: TextStyle(fontSize: 14.0, fontStyle: FontStyle.italic, color: Colors.grey.shade600)),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- VIEW PARA O RELATÓRIO DA CAIXA ---
+  Widget _buildRelatorioCaixaView() {
+    if (_registrosProducaoDaCaixa.isEmpty && !_isLoading) {
+      return Center( // Não pode ser totalmente const por causa do Icon com Colors.grey.shade400
+        child: Padding(
+          padding: const EdgeInsets.all(20.0), // Aplicado const
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.analytics_outlined, size: 60.0, color: Colors.grey.shade400),
+              const SizedBox(height: 16.0), // Aplicado const
+              Text('Nenhum dado de produção para gerar relatório nesta caixa.', style: TextStyle(fontSize: 18.0, color: Colors.grey.shade600), textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _carregarDadosEProcessarRelatorio,
+      color: const Color(0xFFFFC107), // Aplicado const
+      child: ListView( // Não pode ser const devido aos children dinâmicos
+        padding: const EdgeInsets.all(16.0), // Aplicado const
+        children: <Widget>[
+          Text(
+            'Período de Produção (Caixa ${widget.caixaId.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0')}):',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Colors.green.shade800),
+          ),
+          Text(
+            'De: ${formatDisplayDate(_dataProducaoMaisAntigaDaCaixa)}   Até: ${formatDisplayDate(_dataProducaoMaisRecenteDaCaixa)}',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 24.0), // Aplicado const
+          const Divider(), // Aplicado const
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12.0), // Aplicado const
+            child: Text('Produção de Mel (Caixa)', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
+          ),
+          if (_somaPorCorMelDaCaixa.isNotEmpty)
+            Card(
+              elevation: 2,
+              margin: const EdgeInsets.symmetric(vertical: 8.0), // Aplicado const
+              child: Padding(
+                padding: const EdgeInsets.all(12.0), // Aplicado const
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.forum_outlined, size: 60, color: Colors.grey.shade400),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Nenhuma anotação encontrada.',
-                      style: TextStyle(fontSize: 16, color: Colors.black54),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Toque no botão abaixo para adicionar a primeira.',
-                      style: TextStyle(fontSize: 14, color: Colors.black45),
-                      textAlign: TextAlign.center,
+                    Text('Total por Cor/Tipo:', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8.0), // Aplicado const
+                    ..._somaPorCorMelDaCaixa.entries.map((entry) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3.0), // Aplicado const
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('  • ${entry.key}:', style: const TextStyle(fontSize: 15.5)), // Aplicado const
+                            Text('${entry.value.toStringAsFixed(2)} kg/L', style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w500)), // Aplicado const
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    const Divider(height: 20, thickness: 1), // Aplicado const
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('TOTAL DE MEL (CAIXA):', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                        Text('${_totalMelDaCaixa.toStringAsFixed(2)} kg/L', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
+                      ],
                     ),
                   ],
                 ),
               ),
             )
           else
-            Expanded(
-              child: ListView.builder(
-                itemCount: historico.length,
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                itemBuilder: (_, index) {
-                  final item = historico[index];
-                  // Criando uma chave mais robusta, mas ainda pode melhorar se os itens tiverem IDs únicos do backend.
-                  final String itemKey = '${widget.caixaId}-hist-$index-${item['data']}-${item['hora']}';
-                  return Dismissible(
-                    key: Key(itemKey),
-                    direction: DismissDirection.endToStart,
-                    background: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.redAccent,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: const Icon(Icons.delete_outline, color: Colors.white),
-                    ),
-                    confirmDismiss: (_) async {
-                      return await showDialog(
-                        context: context,
-                        builder: (_) => AlertDialog(
-                          title: const Text("Excluir Anotação"),
-                          content: const Text("Tem certeza que deseja excluir esta anotação?"),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(false),
-                              child: const Text("Cancelar"),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(true),
-                              child: const Text("Excluir", style: TextStyle(color: Colors.red)),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                    onDismissed: (_) async {
-                      await _historicoService.removerHistorico(widget.caixaId, index);
-                      //setState(() => historico.removeAt(index)); // Não é mais necessário se _carregarDadosDaCaixa() for chamado
-                      _carregarDadosDaCaixa(); // Recarrega para garantir consistência
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Anotação excluída')),
-                        );
-                      }
-                    },
-                    child: Card(
-                      color: Colors.white,
-                      elevation: 2, // Suavizado
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      margin: const EdgeInsets.symmetric(vertical: 5), // Reduzido
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        title: Text(
-                          item['descricao'] ?? 'Sem descrição',
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500), // Ajustado
-                        ),
-                        subtitle: Text(
-                          '${item['data']} às ${item['hora']}',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12), // Ajustado
-                        ),
-                        leading: Icon(Icons.notes_rounded, color: Colors.amber.shade700), // Ajustado
-                      ),
-                    ),
-                  );
-                },
-              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0), // Aplicado const
+              child: Text('Nenhum registro de mel para esta caixa.', style: TextStyle(fontSize: 15, fontStyle: FontStyle.italic, color: Colors.grey.shade700)),
             ),
+          const SizedBox(height: 24.0), // Aplicado const
+          const Divider(), // Aplicado const
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12.0), // Aplicado const
+            child: Text('Outros Produtos (Caixa)', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.teal.shade700)),
+          ),
+          _buildOutroProdutoRelatorioCaixa('Geleia Real:', _totalGeleiaRealDaCaixa, 'g'),
+          _buildOutroProdutoRelatorioCaixa('Própolis:', _totalPropolisDaCaixa, 'g/mL'),
+          _buildOutroProdutoRelatorioCaixa('Cera de Abelha:', _totalCeraDaCaixa, 'kg/placas'),
+          _buildOutroProdutoRelatorioCaixa('Apitoxina:', _totalApitoxinaDaCaixa, 'g/coletor'),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFFFFC107),
-        foregroundColor: Colors.black87,
-        onPressed: _adicionarEntrada,
-        icon: const Icon(Icons.add_comment_outlined),
-        label: const Text('Anotar'),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     );
   }
 }
+
