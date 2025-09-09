@@ -18,6 +18,8 @@ dependencies:
   screenshot: ^1.3.0
   pdf: ^3.10.7
   printing: ^5.12.0
+  fl_chart: ^0.66.0 # Ou a versão mais recente
+
 
 dev_dependencies:
   flutter_test:

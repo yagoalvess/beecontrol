@@ -1,11 +1,13 @@
+import 'package:abelhas/screens/RelatoriosConsolidadosScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:abelhas/services/historico_service.dart'; // VERIFIQUE O CAMINHO
+import 'package:abelhas/services/historico_service.dart';
 import 'package:abelhas/screens/caixa_screen.dart';
 import 'package:abelhas/screens/gerar_qrcode_screen.dart';
 import 'package:abelhas/screens/apiarios_screen.dart';
 import 'package:abelhas/screens/gerar_dois_qr_codes_screen.dart';
-import 'package:abelhas/screens/relatorio_por_apiario_screen.dart';
+// Importe a nova tela consolidada:
+import 'package:abelhas/screens/relatorios_consolidados_screen.dart'; // CERTIFIQUE-SE DESTE CAMINHO
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -71,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
     TextEditingController controller = TextEditingController();
     return showDialog<String>(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(
@@ -97,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       leading: Icon(Icons.location_on, color: Theme.of(context).colorScheme.primary),
                       title: Text(option, style: const TextStyle(fontWeight: FontWeight.w500)),
                       onTap: () {
-                        Navigator.of(context).pop(option);
+                        Navigator.of(dialogContext).pop(option);
                       },
                     ),
                   );
@@ -134,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
           actions: <Widget>[
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop();
+                Navigator.of(dialogContext).pop();
               },
               child: Text('Cancelar', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
             ),
@@ -147,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: const Text('Salvar Novo'),
               onPressed: () {
                 if (controller.text.trim().isNotEmpty) {
-                  Navigator.of(context).pop(controller.text.trim());
+                  Navigator.of(dialogContext).pop(controller.text.trim());
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Por favor, digite o nome do local para criar um novo.')),
@@ -195,7 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Set<String> selecaoNoModal = Set.from(_caixasSelecionadasParaImpressaoDupla);
 
         return StatefulBuilder(
-          builder: (BuildContext context, StateSetter modalSetState) {
+          builder: (BuildContext innerContext, StateSetter modalSetState) {
             return SizedBox(
               height: MediaQuery.of(modalContext).size.height * 0.75,
               child: Column(
@@ -204,7 +206,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
                     child: Text(
                       'Selecione 2 Caixas (${selecaoNoModal.length}/2)',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                      style: Theme.of(innerContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
                   const Divider(),
@@ -223,7 +225,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           title: Text('Caixa: $idCaixa', style: const TextStyle(fontWeight: FontWeight.w500)),
                           subtitle: Text('Local: $localCaixa'),
                           value: isSelected,
-                          activeColor: Theme.of(context).primaryColor,
+                          activeColor: Theme.of(innerContext).primaryColor,
                           onChanged: (bool? selecionado) {
                             modalSetState(() {
                               if (selecionado == true) {
@@ -256,8 +258,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size(double.infinity, 50),
                         textStyle: const TextStyle(fontSize: 16),
-                        backgroundColor: Theme.of(context).primaryColor,
-                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                        backgroundColor: Theme.of(innerContext).primaryColor,
+                        foregroundColor: Theme.of(innerContext).colorScheme.onPrimary,
                       ),
                       onPressed: selecaoNoModal.length == 2
                           ? () {
@@ -266,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           _caixasSelecionadasParaImpressaoDupla.addAll(selecaoNoModal);
                         });
                         Navigator.pop(modalContext);
-                        if (context.mounted) {
+                        if (mounted) {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -296,7 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (context) => const ScannerScreen()),
     );
 
-    if (codigoLido != null && codigoLido.isNotEmpty && context.mounted) {
+    if (codigoLido != null && codigoLido.isNotEmpty && mounted) {
       final historicoService = HistoricoService();
       final List<Map<String, dynamic>> todasAsCaixas = await historicoService.getTodasCaixasComLocal();
 
@@ -305,10 +307,10 @@ class _HomeScreenState extends State<HomeScreen> {
         orElse: () => <String, dynamic>{},
       );
 
-      if (caixaEncontrada.isNotEmpty && context.mounted) {
+      if (caixaEncontrada.isNotEmpty && mounted) {
         final String localDaCaixaParaNavegar = caixaEncontrada['local']?.toString() ?? 'Local Desconhecido';
         _navegarParaCaixa(context, codigoLido, localDaCaixaParaNavegar);
-      } else if (context.mounted) {
+      } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Caixa com ID "$codigoLido" não encontrada.')),
         );
@@ -328,14 +330,15 @@ class _HomeScreenState extends State<HomeScreen> {
         Colors.teal,
             () => _selecionarCaixasParaImpressaoDupla(context),
       ),
+      // NOVO BOTÃO CONSOLIDADO DE RELATÓRIOS
       _MenuItem(
-        "Relatório por Apiário",
-        Icons.analytics_outlined,
-        Colors.lightGreen.shade700,
+        "Relatórios Produção",
+        Icons.insights, // ou Icons.assessment, Icons.leaderboard
+        Colors.black,   // ou outra cor de sua preferência
             () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const RelatorioPorApiarioScreen()),
+            MaterialPageRoute(builder: (context) => const RelatoriosConsolidadosScreen()),
           );
         },
       ),
@@ -345,12 +348,8 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('BeeControl'),
-        // =======================================================================
-        // CORES DO APPBAR DA HOMESCREEN ALTERADAS PARA AS CORES DA CAIXASCREEN
-        // =======================================================================
-        backgroundColor: const Color(0xFFFFC107), // Amarelo/Dourado da CaixaScreen
-        foregroundColor: Colors.black87,         // Preto Suave da CaixaScreen
-        // =======================================================================
+        backgroundColor: const Color(0xFFFFC107),
+        foregroundColor: Colors.black87,
       ),
       body: Center(
         child: Padding(
@@ -367,6 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
               if (buttonWidth < 130) buttonWidth = 130;
               if (buttonWidth > 200 && itemsPerRow == 2) buttonWidth = 200;
+              if (buttonWidth > 180 && itemsPerRow == 3) buttonWidth = 180;
 
               return SizedBox(
                 width: buttonWidth,
@@ -438,9 +438,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ler Caixa'),
-        // PARA MANTER A CONSISTÊNCIA, APLICAMOS AS MESMAS CORES AQUI TAMBÉM
-        backgroundColor: const Color(0xFFFFC107), // Amarelo/Dourado
-        foregroundColor: Colors.black87,         // Preto Suave
+        backgroundColor: const Color(0xFFFFC107),
+        foregroundColor: Colors.black87,
       ),
       body: MobileScanner(
         controller: cameraController,
@@ -462,4 +461,3 @@ class _ScannerScreenState extends State<ScannerScreen> {
     );
   }
 }
-
