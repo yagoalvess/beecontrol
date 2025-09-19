@@ -71,15 +71,12 @@ class HistoricoService {
     if (!caixasExistentes.any((caixa) => caixa['id'] == id)) {
       final novaCaixa = {
         'id': id,
-        'local': local,
+        'local': local.trim(), // Garante que o local seja salvo sem espaços extras
         'observacaoFixa': null,
-        // Campos opcionais para gráficos futuros de tipos de caixa:
-        // 'tipoCaixa': 'Langstroth', // Ex: Padrão
-        // 'classificacaoCaixa': 'Nova', // Ex: Padrão
       };
       caixasExistentesJson.add(json.encode(novaCaixa));
       await prefs.setStringList(_chaveListaCaixasInfo, caixasExistentesJson);
-      print('HistoricoService: Caixa $id criada no local "$local".');
+      print('HistoricoService: Caixa $id criada no local "${local.trim()}".');
     } else {
       print('HistoricoService: Caixa com ID $id já existe. Nenhuma nova caixa foi criada.');
     }
@@ -96,9 +93,32 @@ class HistoricoService {
         print("HistoricoService: Erro ao decodificar JSON em getTodasCaixasComLocal: $error. Item: $e");
       }
     }
-    // print("HistoricoService: getTodasCaixasComLocal retornou ${caixasList.length} caixas.");
     return caixasList;
   }
+
+  // **** NOVO MÉTODO ADICIONADO AQUI ****
+  Future<List<String>> getLocaisUnicos() async {
+    try {
+      final List<Map<String, dynamic>> todasAsCaixas = await getTodasCaixasComLocal();
+      if (todasAsCaixas.isEmpty) {
+        return [];
+      }
+
+      final Set<String> locais = {}; // Usa um Set para garantir unicidade
+      for (var caixaInfo in todasAsCaixas) {
+        final String? local = caixaInfo['local'] as String?;
+        if (local != null && local.trim().isNotEmpty) {
+          locais.add(local.trim());
+        }
+      }
+      // Converte o Set para uma List e a ordena alfabeticamente
+      return locais.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    } catch (e) {
+      print("Erro ao buscar locais únicos no HistoricoService (SharedPreferences): $e");
+      return []; // Retorna lista vazia em caso de erro
+    }
+  }
+  // **** FIM DO NOVO MÉTODO ****
 
   Future<bool> atualizarLocalDaCaixa(String caixaId, String novoLocal) async {
     final prefs = await SharedPreferences.getInstance();
@@ -108,7 +128,7 @@ class HistoricoService {
         .toList();
     int indexDaCaixa = caixas.indexWhere((caixa) => caixa['id'] == caixaId);
     if (indexDaCaixa != -1) {
-      caixas[indexDaCaixa]['local'] = novoLocal;
+      caixas[indexDaCaixa]['local'] = novoLocal.trim(); // Salva o local trimado
       final novasCaixasJson =
       caixas.map((caixa) => json.encode(caixa)).toList();
       await prefs.setStringList(_chaveListaCaixasInfo, novasCaixasJson);
@@ -159,9 +179,9 @@ class HistoricoService {
   Future<List<String>> getTodosOsIdsDeCaixas() async {
     final caixasComLocal = await getTodasCaixasComLocal();
     return caixasComLocal
-        .map((caixa) => caixa['id'] as String?) // Mapeia para String opcional
-        .where((id) => id != null && id.isNotEmpty) // Filtra nulos e vazios
-        .map((id) => id!) // Converte de volta para String não-nula
+        .map((caixa) => caixa['id'] as String?)
+        .where((id) => id != null && id.isNotEmpty)
+        .map((id) => id!)
         .toList();
   }
 
@@ -248,9 +268,9 @@ class HistoricoService {
         DateTime? dateA = DateTime.tryParse(a['dataProducao'] as String? ?? '');
         DateTime? dateB = DateTime.tryParse(b['dataProducao'] as String? ?? '');
         if (dateA == null && dateB == null) return 0;
-        if (dateA == null) return 1; // Coloca nulos no final
-        if (dateB == null) return -1; // Coloca nulos no final
-        return dateB.compareTo(dateA); // Ordena do mais recente para o mais antigo
+        if (dateA == null) return 1;
+        if (dateB == null) return -1;
+        return dateB.compareTo(dateA);
       });
     } catch (e) {
       print("HistoricoService: Erro ao ordenar registros de produção: $e");
@@ -283,7 +303,7 @@ class HistoricoService {
         }
       } catch (e) {
         print("HistoricoService: Erro ao decodificar JSON durante a remoção: $e. Item: $jsonString");
-        producoesAtualizadasJson.add(jsonString);
+        producoesAtualizadasJson.add(jsonString); // Mantém o item se não puder decodificar
       }
     }
 
@@ -302,59 +322,37 @@ class HistoricoService {
     }
   }
 
-  // --- MÉTODO IMPLEMENTADO ---
   Future<List<Map<String, dynamic>>> getTodosOsRegistrosDeProducaoComLocal() async {
-    print("HistoricoService: Iniciando getTodosOsRegistrosDeProducaoComLocal...");
     List<Map<String, dynamic>> todosOsRegistrosCombinados = [];
-
-    // 1. Obter informações de todas as caixas, incluindo o local delas
     final List<Map<String, dynamic>> todasAsCaixasInfo = await getTodasCaixasComLocal();
 
     if (todasAsCaixasInfo.isEmpty) {
-      print("HistoricoService: Nenhuma caixa encontrada. Retornando lista vazia de produções.");
       return [];
     }
-    print("HistoricoService: ${todasAsCaixasInfo.length} caixas encontradas para processar.");
 
-    // Criar um mapa de ID da caixa para o nome do local para facilitar a busca
     Map<String, String> mapaCaixaIdParaLocal = {};
     for (var caixaInfo in todasAsCaixasInfo) {
       final String? caixaId = caixaInfo['id'] as String?;
       final String? local = caixaInfo['local'] as String?;
-      if (caixaId != null && local != null && local.isNotEmpty) { // Garante que o local não seja vazio
-        mapaCaixaIdParaLocal[caixaId] = local;
-      } else if (caixaId != null) {
-        mapaCaixaIdParaLocal[caixaId] = 'Local Não Definido'; // Local padrão se nulo ou vazio
+      if (caixaId != null) {
+        mapaCaixaIdParaLocal[caixaId] = local?.trim() ?? 'Local Não Definido';
       }
     }
 
-    // 2. Iterar sobre todas as caixas para buscar seus registros de produção
     for (var caixaInfo in todasAsCaixasInfo) {
       final String? caixaId = caixaInfo['id'] as String?;
       if (caixaId == null || caixaId.isEmpty) {
-        print("HistoricoService: Pular caixa com ID nulo ou vazio: $caixaInfo");
         continue;
       }
 
-      // 3. Obter os registros de produção para a caixa atual
       final List<Map<String, dynamic>> registrosDaCaixa = await getRegistrosProducaoDaCaixa(caixaId);
-      // print("HistoricoService: Caixa $caixaId possui ${registrosDaCaixa.length} registros de produção.");
-
-      // 4. Para cada registro de produção, adicionar a informação do local do apiário e o ID da caixa de origem
       for (var registroProducao in registrosDaCaixa) {
         Map<String, dynamic> registroComLocal = Map.from(registroProducao);
-
-        // Adiciona o local do apiário onde a caixa está
         registroComLocal['localApiario'] = mapaCaixaIdParaLocal[caixaId] ?? 'Local Desconhecido';
-
-        // Adiciona o ID da caixa de onde este registro de produção veio
         registroComLocal['originCaixaId'] = caixaId;
-
         todosOsRegistrosCombinados.add(registroComLocal);
       }
     }
-
-    print("HistoricoService: Total de ${todosOsRegistrosCombinados.length} registros de produção combinados com local.");
     return todosOsRegistrosCombinados;
   }
 }
