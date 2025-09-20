@@ -17,6 +17,37 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final Set<String> _caixasSelecionadasParaImpressaoDupla = {};
   List<Map<String, dynamic>> _listaDeTodasAsCaixasParaSelecao = [];
+  final HistoricoService _historicoService = HistoricoService(); // Instância única
+
+  // Helper para mostrar diálogo de carregamento
+  Future<void> _showLoadingDialog(BuildContext context, String message) async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return Dialog(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(width: 20),
+                Text(message),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Helper para fechar diálogo (geralmente o de carregamento)
+  void _dismissDialog(BuildContext context) {
+    if (mounted) {
+      Navigator.of(context, rootNavigator: true).pop(); //  rootNavigator: true para fechar dialogos sobrepostos
+    }
+  }
 
   void _navegarParaCaixa(BuildContext context, String caixaId, String localRealDaCaixa) {
     Navigator.push(
@@ -44,7 +75,10 @@ class _HomeScreenState extends State<HomeScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(
             title,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
+            style: Theme.of(dialogContext).textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(dialogContext).colorScheme.primary,
+            ),
           ),
           content: SingleChildScrollView(
             child: Column(
@@ -54,7 +88,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (predefinedOptions.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8.0),
-                    child: Text("Ou selecione um local existente:", style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                    child: Text(
+                      "Ou selecione um local existente:",
+                      style: Theme.of(dialogContext).textTheme.titleSmall?.copyWith(
+                        color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ),
                 ...predefinedOptions.map((option) {
                   return Card(
@@ -62,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     elevation: 2,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     child: ListTile(
-                      leading: Icon(Icons.location_on, color: Theme.of(context).colorScheme.primary),
+                      leading: Icon(Icons.location_on, color: Theme.of(dialogContext).colorScheme.primary),
                       title: Text(option, style: const TextStyle(fontWeight: FontWeight.w500)),
                       onTap: () {
                         Navigator.of(dialogContext).pop(option);
@@ -70,19 +109,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   );
                 }).toList(),
-                if (predefinedOptions.isNotEmpty) const SizedBox(height: 16),
-                if (predefinedOptions.isNotEmpty)
+                if (predefinedOptions.isNotEmpty) ...[
+                  const SizedBox(height: 16),
                   Row(
                     children: <Widget>[
                       const Expanded(child: Divider()),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Text("OU", style: TextStyle(color: Theme.of(context).colorScheme.outline)),
+                        child: Text("OU", style: TextStyle(color: Theme.of(dialogContext).colorScheme.outline)),
                       ),
                       const Expanded(child: Divider()),
                     ],
                   ),
-                if (predefinedOptions.isNotEmpty) const SizedBox(height: 16),
+                  const SizedBox(height: 16),
+                ],
                 TextField(
                   controller: controller,
                   decoration: InputDecoration(
@@ -91,11 +131,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    prefixIcon: Icon(Icons.edit_location_alt, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
+                    prefixIcon: Icon(Icons.edit_location_alt, color: Theme.of(dialogContext).colorScheme.onSurface.withOpacity(0.6)),
                     filled: true,
-                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    fillColor: Theme.of(dialogContext).colorScheme.surfaceContainerHighest,
                   ),
                   autofocus: predefinedOptions.isEmpty,
+                  textCapitalization: TextCapitalization.words,
                 ),
               ],
             ),
@@ -105,12 +146,12 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () {
                 Navigator.of(dialogContext).pop();
               },
-              child: Text('Cancelar', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+              child: Text('Cancelar', style: TextStyle(color: Theme.of(dialogContext).colorScheme.onSurface)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(dialogContext).colorScheme.onPrimary,
+                backgroundColor: Theme.of(dialogContext).colorScheme.primary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               child: const Text('Salvar Novo'),
@@ -118,9 +159,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (controller.text.trim().isNotEmpty) {
                   Navigator.of(dialogContext).pop(controller.text.trim());
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Por favor, digite o nome do local para criar um novo ou selecione um existente.')),
-                  );
+                  if (mounted) { // Garante que o context ainda é válido para ScaffoldMessenger
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Por favor, digite o nome do local ou selecione um existente.')),
+                    );
+                  }
                 }
               },
             ),
@@ -131,49 +174,35 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _criarNovaCaixa(BuildContext context) async {
-    final historicoService = HistoricoService();
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return const Dialog(
-          child: Padding(
-            padding: EdgeInsets.all(20.0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 20),
-                Text("Buscando locais..."),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-    List<String> locaisExistentes = await historicoService.getLocaisUnicos();
-    if (mounted) {
-      Navigator.pop(context);
-    } else {
-      return;
-    }
-    if (!mounted) return;
+    _showLoadingDialog(context, "Buscando locais...");
+    try {
+      List<String> locaisExistentes = await _historicoService.getLocaisUnicos();
+      _dismissDialog(context); // Fechar o diálogo de "Buscando locais..."
+      if (!mounted) return;
 
-    String? localDaNovaCaixa = await _showInputDialogParaCriacao(
-      context,
-      'Criar Nova Colmeia',
-      'Digite o local ou escolha um existente',
-      locaisExistentes,
-    );
-
-    if (localDaNovaCaixa != null && localDaNovaCaixa.isNotEmpty) {
-      String novoId = await historicoService.gerarNovoId();
-      await historicoService.criarCaixa(novoId, localDaNovaCaixa);
-      if (!context.mounted) return;
-      Navigator.push(
+      String? localDaNovaCaixa = await _showInputDialogParaCriacao(
         context,
-        MaterialPageRoute(builder: (_) => GerarQRCodeScreen(novoId: novoId)),
+        'Criar Nova Colmeia',
+        'Digite o local ou escolha um existente',
+        locaisExistentes,
       );
+
+      if (localDaNovaCaixa != null && localDaNovaCaixa.trim().isNotEmpty) {
+        String novoId = await _historicoService.gerarNovoId();
+        await _historicoService.criarCaixa(novoId, localDaNovaCaixa.trim());
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => GerarQRCodeScreen(novoId: novoId)),
+        );
+      }
+    } catch (e) {
+      _dismissDialog(context); // Garante que o diálogo de loading seja fechado em caso de erro
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao buscar locais: ${e.toString()}')),
+        );
+      }
     }
   }
 
@@ -187,139 +216,129 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _selecionarCaixasParaImpressaoDupla(BuildContext context) async {
-    final historicoService = HistoricoService();
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return const Dialog(
-          child: Padding(
-            padding: EdgeInsets.all(20.0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 20),
-                Text("Carregando caixas..."),
-              ],
-            ),
-          ),
+    _showLoadingDialog(context, "Carregando caixas...");
+    try {
+      _listaDeTodasAsCaixasParaSelecao = await _historicoService.getTodasCaixasComLocal();
+      _dismissDialog(context);
+      if (!mounted) return;
+
+      if (_listaDeTodasAsCaixasParaSelecao.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nenhuma caixa criada para selecionar.')),
         );
-      },
-    );
-    _listaDeTodasAsCaixasParaSelecao = await historicoService.getTodasCaixasComLocal();
-    if(mounted) Navigator.pop(context); else return;
+        return;
+      }
+      _caixasSelecionadasParaImpressaoDupla.clear();
 
-    if (!context.mounted) return;
-    if (_listaDeTodasAsCaixasParaSelecao.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nenhuma caixa criada para selecionar.')),
-      );
-      return;
-    }
-    _caixasSelecionadasParaImpressaoDupla.clear();
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20.0)),
-      ),
-      builder: (BuildContext modalContext) {
-        Set<String> selecaoNoModal = Set.from(_caixasSelecionadasParaImpressaoDupla);
-        return StatefulBuilder(
-          builder: (BuildContext innerContext, StateSetter modalSetState) {
-            return SizedBox(
-              height: MediaQuery.of(modalContext).size.height * 0.75,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
-                    child: Text(
-                      'Selecione 2 Caixas (${selecaoNoModal.length}/2)',
-                      style: Theme.of(innerContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const Divider(),
-                  Expanded(
-                    child: _listaDeTodasAsCaixasParaSelecao.isEmpty
-                        ? const Center(child: Text('Nenhuma caixa encontrada.'))
-                        : ListView.builder(
-                      itemCount: _listaDeTodasAsCaixasParaSelecao.length,
-                      itemBuilder: (ctx, index) {
-                        final caixa = _listaDeTodasAsCaixasParaSelecao[index];
-                        final String idCaixa = caixa['id']?.toString() ?? 'ID Desconhecido';
-                        final String localCaixa = caixa['local']?.toString() ?? 'Local não definido';
-                        final bool isSelected = selecaoNoModal.contains(idCaixa);
-                        return CheckboxListTile(
-                          title: Text('Caixa: $idCaixa', style: const TextStyle(fontWeight: FontWeight.w500)),
-                          subtitle: Text('Local: $localCaixa'),
-                          value: isSelected,
-                          activeColor: Theme.of(innerContext).primaryColor,
-                          onChanged: (bool? selecionado) {
-                            modalSetState(() {
-                              if (selecionado == true) {
-                                if (selecaoNoModal.length < 2) {
-                                  selecaoNoModal.add(idCaixa);
-                                } else {
-                                  ScaffoldMessenger.of(modalContext).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Máximo de 2 caixas já selecionadas. Desmarque uma primeiro.'),
-                                      duration: Duration(seconds: 2),
-                                    ),
-                                  );
-                                }
-                              } else {
-                                selecaoNoModal.remove(idCaixa);
-                              }
-                            });
-                          },
-                          controlAffinity: ListTileControlAffinity.leading,
-                        );
-                      },
-                    ),
-                  ),
-                  const Divider(),
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.qr_code_2_outlined),
-                      label: const Text('Gerar QR Codes Empilhados'),
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 50),
-                        textStyle: const TextStyle(fontSize: 16),
-                        backgroundColor: Theme.of(innerContext).primaryColor,
-                        foregroundColor: Theme.of(innerContext).colorScheme.onPrimary,
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20.0)),
+        ),
+        builder: (BuildContext modalContext) {
+          Set<String> selecaoNoModal = Set.from(_caixasSelecionadasParaImpressaoDupla);
+          return StatefulBuilder(
+            builder: (BuildContext innerContext, StateSetter modalSetState) {
+              return SizedBox(
+                height: MediaQuery.of(modalContext).size.height * 0.75,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
+                      child: Text(
+                        'Selecione 2 Caixas (${selecaoNoModal.length}/2)',
+                        style: Theme.of(innerContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                       ),
-                      onPressed: selecaoNoModal.length == 2
-                          ? () {
-                        setState(() {
-                          _caixasSelecionadasParaImpressaoDupla.clear();
-                          _caixasSelecionadasParaImpressaoDupla.addAll(selecaoNoModal);
-                        });
-                        Navigator.pop(modalContext);
-                        if (mounted) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => GerarDoisQrCodesScreen(
-                                idCaixa1: _caixasSelecionadasParaImpressaoDupla.first,
-                                idCaixa2: _caixasSelecionadasParaImpressaoDupla.last,
-                              ),
-                            ),
-                          );
-                        }
-                      }
-                          : null,
                     ),
-                  ),
-                ],
-              ),
-            );
-          },
+                    const Divider(),
+                    Expanded(
+                      child: _listaDeTodasAsCaixasParaSelecao.isEmpty
+                          ? const Center(child: Text('Nenhuma caixa encontrada.'))
+                          : ListView.builder(
+                        itemCount: _listaDeTodasAsCaixasParaSelecao.length,
+                        itemBuilder: (ctx, index) {
+                          final caixa = _listaDeTodasAsCaixasParaSelecao[index];
+                          final String idCaixa = caixa['id']?.toString() ?? 'ID Desconhecido';
+                          final String localCaixa = caixa['local']?.toString() ?? 'Local não definido';
+                          final bool isSelected = selecaoNoModal.contains(idCaixa);
+                          return CheckboxListTile(
+                            title: Text('Caixa: $idCaixa', style: const TextStyle(fontWeight: FontWeight.w500)),
+                            subtitle: Text('Local: $localCaixa'),
+                            value: isSelected,
+                            activeColor: Theme.of(innerContext).primaryColor,
+                            onChanged: (bool? selecionado) {
+                              modalSetState(() {
+                                if (selecionado == true) {
+                                  if (selecaoNoModal.length < 2) {
+                                    selecaoNoModal.add(idCaixa);
+                                  } else {
+                                    ScaffoldMessenger.of(modalContext).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Máximo de 2 caixas já selecionadas. Desmarque uma primeiro.'),
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                  }
+                                } else {
+                                  selecaoNoModal.remove(idCaixa);
+                                }
+                              });
+                            },
+                            controlAffinity: ListTileControlAffinity.leading,
+                          );
+                        },
+                      ),
+                    ),
+                    const Divider(),
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.qr_code_2_outlined),
+                        label: const Text('Gerar QR Codes Empilhados'),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 50),
+                          textStyle: const TextStyle(fontSize: 16),
+                          backgroundColor: Theme.of(innerContext).primaryColor,
+                          foregroundColor: Theme.of(innerContext).colorScheme.onPrimary,
+                        ),
+                        onPressed: selecaoNoModal.length == 2
+                            ? () {
+                          setState(() {
+                            _caixasSelecionadasParaImpressaoDupla.clear();
+                            _caixasSelecionadasParaImpressaoDupla.addAll(selecaoNoModal);
+                          });
+                          Navigator.pop(modalContext);
+                          if (mounted) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => GerarDoisQrCodesScreen(
+                                  idCaixa1: _caixasSelecionadasParaImpressaoDupla.first,
+                                  idCaixa2: _caixasSelecionadasParaImpressaoDupla.last,
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      _dismissDialog(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao carregar caixas: ${e.toString()}')),
         );
-      },
-    );
+      }
+    }
   }
 
   void _lerQRCode(BuildContext context) async {
@@ -328,42 +347,33 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (context) => const ScannerScreen()),
     );
 
-    if (codigoLido != null && codigoLido.isNotEmpty && mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext dialogContext) {
-          return const Dialog(
-            child: Padding(
-              padding: EdgeInsets.all(20.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(width: 20),
-                  Text("Verificando caixa..."),
-                ],
-              ),
-            ),
-          );
-        },
-      );
-      final historicoService = HistoricoService();
-      final List<Map<String, dynamic>> todasAsCaixas = await historicoService.getTodasCaixasComLocal();
-      if(mounted) Navigator.pop(context); else return;
+    if (codigoLido != null && codigoLido.trim().isNotEmpty && mounted) {
+      _showLoadingDialog(context, "Verificando caixa...");
+      try {
+        final List<Map<String, dynamic>> todasAsCaixas = await _historicoService.getTodasCaixasComLocal();
+        _dismissDialog(context);
+        if (!mounted) return;
 
-      final caixaEncontrada = todasAsCaixas.firstWhere(
-            (caixa) => caixa['id']?.toString() == codigoLido,
-        orElse: () => <String, dynamic>{},
-      );
-
-      if (caixaEncontrada.isNotEmpty && mounted) {
-        final String localDaCaixaParaNavegar = caixaEncontrada['local']?.toString() ?? 'Local Desconhecido';
-        _navegarParaCaixa(context, codigoLido, localDaCaixaParaNavegar);
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Caixa com ID "$codigoLido" não encontrada.')),
+        final caixaEncontrada = todasAsCaixas.firstWhere(
+              (caixa) => caixa['id']?.toString() == codigoLido,
+          orElse: () => <String, dynamic>{},
         );
+
+        if (caixaEncontrada.isNotEmpty && mounted) {
+          final String localDaCaixaParaNavegar = caixaEncontrada['local']?.toString() ?? 'Local Desconhecido';
+          _navegarParaCaixa(context, codigoLido, localDaCaixaParaNavegar);
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Caixa com ID "$codigoLido" não encontrada ou ID inválido.')),
+          );
+        }
+      } catch (e) {
+        _dismissDialog(context);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao verificar caixa: ${e.toString()}')),
+          );
+        }
       }
     }
   }
@@ -386,17 +396,13 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     ];
 
-    // **** AJUSTE DE PERFORMANCE: CÁLCULO DA LARGURA DO BOTÃO FORA DO .map() ****
     double screenWidth = MediaQuery.of(context).size.width;
     int itemsPerRow = screenWidth > (700 - 32) ? 3 : 2;
-    double availableWidthForWrap = screenWidth - (16.0 * 2); // Considera o padding do body
+    double availableWidthForWrap = screenWidth - (16.0 * 2);
     double totalHorizontalSpacingInWrap = (itemsPerRow - 1) * 16.0;
     double buttonWidth = (availableWidthForWrap - totalHorizontalSpacingInWrap) / itemsPerRow;
+    buttonWidth = buttonWidth.clamp(140.0, (itemsPerRow == 2) ? 220.0 : 190.0);
 
-    if (buttonWidth < 140) buttonWidth = 140;
-    if (buttonWidth > 220 && itemsPerRow == 2) buttonWidth = 220;
-    if (buttonWidth > 190 && itemsPerRow == 3) buttonWidth = 190;
-    // **** FIM DO AJUSTE DE PERFORMANCE ****
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -410,8 +416,8 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: EdgeInsets.zero,
           children: <Widget>[
             DrawerHeader(
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFC107),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFFC107),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -461,8 +467,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: <Widget>[
                     const Padding(
                         padding: EdgeInsets.only(top: 15),
-                        child: Text('Aplicativo para gerenciamento eficiente de apiários e colmeias.')
-                    )
+                        child: Text('Aplicativo para gerenciamento eficiente de apiários e colmeias.'))
                   ],
                 );
               },
@@ -483,17 +488,17 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 20.0),
+            // ***** MODIFICAÇÃO PARA CENTRALIZAR O WRAP *****
             Expanded(
-              child: Align(
-                alignment: Alignment.topCenter,
+              child: Center( // Adicionado Center para centralizar o Wrap
                 child: Wrap(
-                  alignment: WrapAlignment.center,
+                  alignment: WrapAlignment.center, // Mantém o alinhamento dos itens DENTRO do Wrap
+                  crossAxisAlignment: WrapCrossAlignment.center, // Para alinhar verticalmente se houver múltiplas linhas
                   spacing: 16,
                   runSpacing: 16,
                   children: menuItensPrincipais.map((item) {
-                    // USA O buttonWidth CALCULADO FORA DO MAP
                     return SizedBox(
-                      width: buttonWidth, // Variável calculada acima
+                      width: buttonWidth,
                       height: 125,
                       child: ElevatedButton(
                         onPressed: item.acao,
@@ -531,6 +536,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+            // ***** FIM DA MODIFICAÇÃO *****
           ],
         ),
       ),
@@ -613,11 +619,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
               final List<Barcode> barcodes = capture.barcodes;
               if (barcodes.isNotEmpty) {
                 final String? codigo = barcodes.first.rawValue;
-                if (codigo != null && codigo.isNotEmpty) {
+                if (codigo != null && codigo.trim().isNotEmpty) {
                   setState(() {
                     _codigoLido = true;
                   });
-                  if (mounted) Navigator.pop(context, codigo);
+                  if (mounted) Navigator.pop(context, codigo.trim());
                 }
               }
             },
