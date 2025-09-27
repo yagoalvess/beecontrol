@@ -154,7 +154,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 backgroundColor: Theme.of(dialogContext).colorScheme.primary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              child: const Text('Salvar Novo'),
+              child: const Text('Salvar'),
               onPressed: () {
                 if (controller.text.trim().isNotEmpty) {
                   Navigator.of(dialogContext).pop(controller.text.trim());
@@ -182,7 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       String? localDaNovaCaixa = await _showInputDialogParaCriacao(
         context,
-        'Criar Nova Colmeia',
+        'Criar Novo Apiario',
         'Digite o local ou escolha um existente',
         locaisExistentes,
       );
@@ -438,7 +438,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ListTile(
               leading: Icon(Icons.add_box_outlined, color: Colors.blue.shade700),
-              title: const Text('Criar Nova Caixa', style: TextStyle(fontSize: 16)),
+              title: const Text('Criar Apiario', style: TextStyle(fontSize: 16)),
               onTap: () {
                 Navigator.pop(context);
                 _criarNovaCaixa(context);
@@ -463,7 +463,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   applicationName: 'BeeControl',
                   applicationVersion: '1.0.1',
                   applicationIcon: const Icon(Icons.hive_outlined, size: 40, color: Color(0xFFFFC107)),
-                  applicationLegalese: '© 2023-2024 Seu Nome/Empresa',
+                  applicationLegalese: '© 2025',
                   children: <Widget>[
                     const Padding(
                         padding: EdgeInsets.only(top: 15),
