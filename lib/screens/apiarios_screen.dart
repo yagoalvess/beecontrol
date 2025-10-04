@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async'; // Para Timer (debounce)
 import 'caixa_screen.dart';
-// import 'package:abelhas/screens/gerar_qrcode_screen.dart'; // Removido
 import 'package:abelhas/services/historico_service.dart';
 
 class ApiariosScreen extends StatefulWidget {
@@ -20,15 +19,6 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
   bool _isLoading = true;
   Timer? _debounce;
 
-  // Lista estática para opções de edição, se você não quiser buscar do service toda vez
-  // ou se o service for o problema. Para simplificar, vamos assumir que pode ser estático aqui.
-  // Se precisar ser dinâmico, a chamada ao service voltaria para _editarCaixa.
-  // final List<String> _locaisPreDefinidosParaEdicao = const [ // Removido por enquanto para simplificar o diálogo
-  //   'Apiário Central',
-  //   'Apiário do Sul',
-  //   'Apiário Experimental',
-  //   'Apiário da Mata',
-  // ];
 
 
   @override

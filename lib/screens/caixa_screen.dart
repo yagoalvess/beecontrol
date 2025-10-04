@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:abelhas/services/historico_service.dart'; // Certifique-se que o caminho está correto
+import 'package:abelhas/services/historico_service.dart';
 import 'package:intl/intl.dart';
 import 'package:abelhas/screens/registrar_producao_screen.dart';
 
@@ -73,9 +73,10 @@ class _CaixaScreenState extends State<CaixaScreen>
   List<Map<String, dynamic>> _registrosProducaoDaCaixa = [];
 
   double _totalMelDaCaixa = 0;
-  double _totalGeleiaRealDaCaixa = 0;
+  double _totalCeraDaCaixa= 0;
   double _totalPropolisDaCaixa = 0;
-  double _totalCeraDaCaixa = 0;
+  double _totalPolenDaCaixa = 0;
+  Map<String, double> _totaisPropolisPorCor = {};
   DateTime? _dataProducaoMaisAntigaDaCaixa;
   DateTime? _dataProducaoMaisRecenteDaCaixa;
 
@@ -160,15 +161,23 @@ class _CaixaScreenState extends State<CaixaScreen>
     await _carregarDadosEProcessarRelatorio();
   }
 
+  // COLE ESTE MÉTODO CORRIGIDO NO LUGAR DO ANTIGO
   void _processarDadosDeProducaoParaRelatorioLocal(List<Map<String, dynamic>> registros) {
+    // 1. Zera todas as variáveis de total no início
     _totalMelDaCaixa = 0;
-    _totalGeleiaRealDaCaixa = 0;
-    _totalPropolisDaCaixa = 0;
     _totalCeraDaCaixa = 0;
+    _totalPolenDaCaixa = 0;
+    _totaisPropolisPorCor = {}; // Zera o mapa de totais por cor (a variável da classe)
+    _totalPropolisDaCaixa = 0; // Zera o total geral de própolis
+
     _dataProducaoMaisAntigaDaCaixa = null;
     _dataProducaoMaisRecenteDaCaixa = null;
+
     if (registros.isEmpty) return;
+
+    // 2. Percorre cada registro de produção
     for (var registro in registros) {
+      // Lógica de datas (mantida)
       try {
         if (registro['dataProducao'] != null) {
           DateTime dataAtualRegistro = DateTime.parse(registro['dataProducao'] as String);
@@ -179,13 +188,27 @@ class _CaixaScreenState extends State<CaixaScreen>
             _dataProducaoMaisRecenteDaCaixa = dataAtualRegistro;
           }
         }
-      } catch (e) { /* silent */ }
+      } catch (e) { /* ignora erros de data */ }
+
+      // 3. Soma os outros produtos
       _totalMelDaCaixa += ((registro['quantidadeMel'] as num?)?.toDouble() ?? 0);
-      _totalGeleiaRealDaCaixa += ((registro['quantidadeGeleiaReal'] as num?)?.toDouble() ?? 0);
-      _totalPropolisDaCaixa += ((registro['quantidadePropolis'] as num?)?.toDouble() ?? 0);
-      _totalCeraDaCaixa += ((registro['quantidadeCera'] as num?)?.toDouble() ?? 0);
+      _totalCeraDaCaixa += ((registro['quantidadeCera'] as num?)?.toDouble() ?? 0); // USA 'quantidadeCera'
+      _totalPolenDaCaixa += ((registro['quantidadePolen'] as num?)?.toDouble() ?? 0);
+
+      // 4. LÓGICA CORRETA PARA PRÓPOLIS
+      final double quantidadePropolis = (registro['quantidadePropolis'] as num?)?.toDouble() ?? 0;
+      if (quantidadePropolis > 0) {
+        final String cor = registro['corDaPropolis'] as String? ?? 'Sem Cor';
+        // Adiciona a quantidade ao total daquela cor específica no mapa da classe
+        _totaisPropolisPorCor[cor] = (_totaisPropolisPorCor[cor] ?? 0) + quantidadePropolis;
+      }
     }
+
+    // 5. No final, calcula o total geral de própolis a partir do mapa de cores
+    _totalPropolisDaCaixa = _totaisPropolisPorCor.values.fold(0.0, (soma, item) => soma + item);
   }
+
+
 
   Future<void> _handleServiceAndUpdate(
       Future<bool> Function() serviceCall, {
@@ -774,10 +797,10 @@ class _CaixaScreenState extends State<CaixaScreen>
       );
     }
     List<Widget> childrenDetalhes = [
-      buildDetalheItem('Mel', producao['quantidadeMel'] != null ? '${(producao['quantidadeMel'] as num).toStringAsFixed(2)} kg/L' : null),
-      buildDetalheItem('Geleia Real', producao['quantidadeGeleiaReal'] != null ? '${(producao['quantidadeGeleiaReal'] as num).toStringAsFixed(2)}g' : null),
-      buildDetalheItem('Própolis', producao['quantidadePropolis'] != null ? '${(producao['quantidadePropolis'] as num).toStringAsFixed(2)}g/mL' : null, corPropolis: producao['corDaPropolis']?.toString()),
-      buildDetalheItem('Cera', producao['quantidadeCera'] != null ? '${(producao['quantidadeCera'] as num).toStringAsFixed(2)}kg/placas' : null),
+      buildDetalheItem('Mel', producao['quantidadeMel'] != null ? '${(producao['quantidadeMel'] as num).toStringAsFixed(2)} Kg' : null),
+      buildDetalheItem('Pólen', producao['quantidadePolen'] != null ? '${(producao['quantidadePolen'] as num).toStringAsFixed(2)} g' : null),
+      buildDetalheItem('Cera de abelha', producao['quantidadeCera'] != null ? '${(producao['quantidadeCera'] as num).toStringAsFixed(2)} g' : null),
+      buildDetalheItem('Própolis', producao['quantidadePropolis'] != null ? '${(producao['quantidadePropolis'] as num).toStringAsFixed(2)}g' : null, corPropolis: producao['corDaPropolis']?.toString()),
     ];
     if (producao['observacaoProducao'] != null && (producao['observacaoProducao'] as String).isNotEmpty) {
       childrenDetalhes.add(Padding(padding: const EdgeInsets.only(top: 8.0), child: Text("Obs: ${producao['observacaoProducao']}", style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic, color: Colors.grey.shade700))));
@@ -828,44 +851,146 @@ class _CaixaScreenState extends State<CaixaScreen>
     );
   }
 
+  // COLE ESTE BLOCO INTEIRO NO SEU CÓDIGO
+
+  // COLE ESTE BLOCO NO LUGAR DO SEU _buildRelatorioCaixaView E _buildOutroProdutoRelatorioCaixa
+
+  // COLE ESTE BLOCO NO LUGAR DO _buildRelatorioCaixaView E SEU MÉTODO AUXILIAR
+
   Widget _buildRelatorioCaixaView() {
-    if (_registrosProducaoDaCaixa.isEmpty && !_isLoading) {
-      return Center(
+    if (_registrosProducaoDaCaixa.isEmpty) {
+      return const Center(
         child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.analytics_outlined, size: 60.0, color: Colors.grey.shade400),
-            const SizedBox(height: 16.0),
-            Text('Nenhum dado de produção para gerar relatório nesta caixa.', style: TextStyle(fontSize: 18.0, color: Colors.grey.shade600), textAlign: TextAlign.center),
-          ]),
+          padding: EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.grey, size: 50),
+              SizedBox(height: 16),
+              Text(
+                'Nenhum registro de produção encontrado para esta colmeia.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+            ],
+          ),
         ),
       );
     }
     return RefreshIndicator(
-      onRefresh: _carregarDadosEProcessarRelatorio, color: const Color(0xFFFFC107),
+      onRefresh: _carregarDadosIniciais,
       child: ListView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 80.0), // Padding inferior para o FAB
         children: <Widget>[
-          Text('Período de Produção (Caixa ${widget.caixaId.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0')}):', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Colors.green.shade800)),
-          Text('De: ${formatDisplayDate(_dataProducaoMaisAntigaDaCaixa)}   Até: ${formatDisplayDate(_dataProducaoMaisRecenteDaCaixa)}', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 24.0), const Divider(),
-          Padding(padding: const EdgeInsets.symmetric(vertical: 12.0), child: Text('Produção de Mel (Caixa)', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.amber.shade900))),
-          if (_totalMelDaCaixa > 0)
-            Card(
-              elevation: 1.5, margin: const EdgeInsets.symmetric(vertical: 6.0),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [ Text('TOTAL DE MEL (CAIXA):', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)), Text('${_totalMelDaCaixa.toStringAsFixed(2)} kg/L', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.amber.shade900))]),
+          // CARD DE PERÍODO MELHORADO
+          Card(
+            elevation: 2.0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            color: Colors.blueGrey.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.calendar_today_rounded, color: Colors.blueGrey.shade700, size: 22),
+                      const SizedBox(width: 10),
+                      Text('Período do Relatório', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Colors.blueGrey.shade800)),
+                    ],
+                  ),
+                  const Divider(height: 20, thickness: 1),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('De:', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.blueGrey.shade600)),
+                      Text(formatDisplayDate(_dataProducaoMaisAntigaDaCaixa), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    ],
+                  ),
+                  const SizedBox(height: 6), // Espaço reduzido entre as datas
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Até:', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.blueGrey.shade600)),
+                      Text(formatDisplayDate(_dataProducaoMaisRecenteDaCaixa), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    ],
+                  ),
+                ],
               ),
-            )
-          else Padding(padding: const EdgeInsets.symmetric(vertical: 8.0), child: Text('Nenhum registro de mel para esta caixa.', style: TextStyle(fontSize: 15, fontStyle: FontStyle.italic, color: Colors.grey.shade700))),
-          const SizedBox(height: 24.0), const Divider(),
-          Padding(padding: const EdgeInsets.symmetric(vertical: 12.0), child: Text('Outros Produtos (Caixa)', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.teal.shade700))),
-          _buildOutroProdutoRelatorioCaixa('Geleia Real:', _totalGeleiaRealDaCaixa, 'g'),
-          _buildOutroProdutoRelatorioCaixa('Própolis:', _totalPropolisDaCaixa, 'g/mL'),
-          _buildOutroProdutoRelatorioCaixa('Cera de Abelha:', _totalCeraDaCaixa, 'kg/placas'),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // CARD DE PRODUÇÃO TOTAL MELHORADO
+          Card(
+            elevation: 2.0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16.0, 16, 16.0), // Padding ajustado
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Produção Total', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                  const Divider(height: 20, thickness: 1),
+
+                  // Linhas de produto sem ícones e com fonte ajustada
+                  _buildLinhaProdutoRelatorio('Mel', _totalMelDaCaixa, 'Kg'),
+                  _buildLinhaProdutoRelatorio('Cera de abelha', _totalCeraDaCaixa, 'g'),
+                  _buildLinhaProdutoRelatorio('Pólen', _totalPolenDaCaixa, 'g'),
+
+                  // Lógica para própolis por cor
+                  ..._totaisPropolisPorCor.entries.map((entry) {
+                    return _buildLinhaProdutoRelatorio('Própolis (${entry.key})', entry.value, 'g');
+                  }).toList(),
+
+                  // Linha do total de própolis, se houver mais de uma cor
+                  if (_totaisPropolisPorCor.length > 1) ...[
+                    const Divider(height: 12, indent: 20, endIndent: 20),
+                    _buildLinhaProdutoRelatorio('Total Própolis', _totalPropolisDaCaixa, 'g', isTotal: true),
+                  ],
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
+
+  // NOVO MÉTODO VISUAL PARA AS LINHAS DE PRODUTO (SEM ÍCONE)
+  Widget _buildLinhaProdutoRelatorio(String label, double value, String unit, {bool isTotal = false}) {
+    if (value <= 0 && !isTotal) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0), // Espaçamento entre as linhas
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+              fontSize: 15,
+              color: Colors.black87,
+            ),
+          ),
+          Text(
+            '${value.toStringAsFixed(value % 1 == 0 ? 0 : 2)} $unit',
+            style: const TextStyle(
+              fontSize: 15, // Mesma fonte das datas
+              fontWeight: FontWeight.bold, // Mesma fonte das datas
+              color: Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+
+
+
+
+
+
 }

@@ -22,41 +22,34 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
   final HistoricoService _historicoService = HistoricoService();
 
   DateTime _dataProducao = DateTime.now();
-  // REMOVIDO: _selectedCorMel
   final TextEditingController _quantidadeMelController = TextEditingController();
 
-  bool _produzGeleiaReal = false;
-  final TextEditingController _quantidadeGeleiaRealController =
+  // --- CORRIGIDO: Variáveis renomeadas de Geleia Real para Cera de Abelha ---
+  bool _produzCeraAbelha = false;
+  final TextEditingController _quantidadeCeraController =
   TextEditingController();
 
   bool _produzPropolis = false;
   final TextEditingController _quantidadePropolisController =
   TextEditingController();
-  // NOVO: Estado para cor da Própolis
   String? _selectedCorPropolis;
   final List<String> _opcoesCorPropolis = ['Verde', 'Marrom', 'Outra'];
 
 
-  bool _produzCera = false;
-  final TextEditingController _quantidadeCeraController =
+  bool _produzPolen = false;
+  final TextEditingController _quantidadePolenController =
   TextEditingController();
 
   bool _isSalvando = false;
   bool _isEditando = false;
   String? _idProducaoExistente;
 
-  // REMOVIDO: Listas de cores de mel
-  // final List<String> _opcoesCorMelPadrao = [...];
-  // final List<String> _opcoesCorMelPropolis = [...];
-  // List<String> _opcoesCorMelAtuais = [];
-
 
   @override
   void initState() {
     super.initState();
-    // Não precisamos mais de listeners complexos para cor do mel
     _quantidadeMelController.addListener(() {
-      if(mounted) setState(() {}); // Para atualizar temQuantidadeMel se necessário
+      if(mounted) setState(() {});
     });
 
 
@@ -66,10 +59,6 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
       _preencherCamposComDadosExistentes(widget.registroProducaoExistente!);
     }
   }
-
-  // REMOVIDO: _atualizarOpcoesCorMelDropdown()
-  // REMOVIDO: _onQuantidadeMelChanged() (a lógica simples foi para o listener anônimo acima)
-
 
   void _preencherCamposComDadosExistentes(Map<String, dynamic> dados) {
     _idProducaoExistente = dados['producaoId'] as String?;
@@ -83,13 +72,12 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
 
     _quantidadeMelController.text =
         (dados['quantidadeMel'] as num?)?.toString().replaceAll('.', ',') ?? '';
-    // REMOVIDO: _selectedCorMel = dados['corDoMel'] as String?;
 
-
-    _produzGeleiaReal = dados['produzGeleiaReal'] as bool? ?? false;
-    if (_produzGeleiaReal) {
-      _quantidadeGeleiaRealController.text =
-          (dados['quantidadeGeleiaReal'] as num?)
+    // --- CORRIGIDO: Lógica para preencher os dados de Cera de Abelha ao editar ---
+    _produzCeraAbelha = dados['produzCera'] as bool? ?? false;
+    if (_produzCeraAbelha) {
+      _quantidadeCeraController.text =
+          (dados['quantidadeCera'] as num?)
               ?.toString()
               .replaceAll('.', ',') ??
               '';
@@ -102,21 +90,19 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
               ?.toString()
               .replaceAll('.', ',') ??
               '';
-      // NOVO: Carregar cor da Própolis
       _selectedCorPropolis = dados['corDaPropolis'] as String?;
-      // Garante que a cor selecionada está na lista de opções válidas
       if (_selectedCorPropolis != null && !_opcoesCorPropolis.contains(_selectedCorPropolis)) {
-        _selectedCorPropolis = null; // Reseta se não for uma opção válida
+        _selectedCorPropolis = null;
       }
     } else {
-      _selectedCorPropolis = null; // Garante que está nulo se não produz própolis
+      _selectedCorPropolis = null;
     }
 
 
-    _produzCera = dados['produzCera'] as bool? ?? false;
-    if (_produzCera) {
-      _quantidadeCeraController.text =
-          (dados['quantidadeCera'] as num?)?.toString().replaceAll('.', ',') ??
+    _produzPolen = dados['produzPolen'] as bool? ?? false;
+    if (_produzPolen) {
+      _quantidadePolenController.text =
+          (dados['quantidadePolen'] as num?)?.toString().replaceAll('.', ',') ??
               '';
     }
   }
@@ -124,9 +110,9 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
   @override
   void dispose() {
     _quantidadeMelController.dispose();
-    _quantidadeGeleiaRealController.dispose();
+    _quantidadeCeraController.dispose(); // CORRIGIDO
     _quantidadePropolisController.dispose();
-    _quantidadeCeraController.dispose();
+    _quantidadePolenController.dispose();
     super.dispose();
   }
 
@@ -148,7 +134,6 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    // Validação para cor da Própolis se Própolis estiver ativa e com quantidade
     bool temQuantidadePropolis = (double.tryParse(_quantidadePropolisController.text.replaceAll(',', '.')) ?? 0) > 0;
     if (_produzPropolis && temQuantidadePropolis && _selectedCorPropolis == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -156,7 +141,6 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
       );
       return;
     }
-
 
     setState(() {
       _isSalvando = true;
@@ -167,33 +151,32 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
       return double.tryParse(value.trim().replaceAll(',', '.'));
     }
 
+    // --- CORRIGIDO: Mapa de dados para salvar 'produzCera' e 'quantidadeCera' ---
     Map<String, dynamic> dadosProducao = {
       'caixaId': widget.caixaId,
       'dataProducao': _dataProducao.toIso8601String(),
-      // REMOVIDO: 'corDoMel'
       'quantidadeMel': tryParseDoubleWithComma(_quantidadeMelController.text),
-      'produzGeleiaReal': _produzGeleiaReal,
-      'quantidadeGeleiaReal': _produzGeleiaReal
-          ? tryParseDoubleWithComma(_quantidadeGeleiaRealController.text)
-          : null,
+
+      'produzCera': _produzCeraAbelha, // Chave correta
+      'quantidadeCera': _produzCeraAbelha
+          ? tryParseDoubleWithComma(_quantidadeCeraController.text)
+          : null, // Chave e controller corretos
+
       'produzPropolis': _produzPropolis,
       'quantidadePropolis': _produzPropolis
           ? tryParseDoubleWithComma(_quantidadePropolisController.text)
           : null,
-      // NOVO: Salvar cor da Própolis
       'corDaPropolis': _produzPropolis && temQuantidadePropolis ? _selectedCorPropolis : null,
 
-      'produzCera': _produzCera,
-      'quantidadeCera': _produzCera
-          ? tryParseDoubleWithComma(_quantidadeCeraController.text)
+      'produzPolen': _produzPolen,
+      'quantidadePolen': _produzPolen
+          ? tryParseDoubleWithComma(_quantidadePolenController.text)
           : null,
     };
 
-    // Remove a chave 'corDaPropolis' se não for aplicável
     if (!(_produzPropolis && temQuantidadePropolis)) {
       dadosProducao.remove('corDaPropolis');
     }
-
 
     if (_isEditando && _idProducaoExistente != null) {
       dadosProducao['producaoId'] = _idProducaoExistente;
@@ -235,8 +218,9 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
     required ValueChanged<bool> onChanged,
     required TextEditingController controller,
     required String quantityLabel,
-    Widget? additionalField, // NOVO: Campo adicional (para o dropdown de cor da própolis)
+    Widget? additionalField,
   }) {
+    // ... (este widget auxiliar já é genérico e não precisa de mudanças) ...
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -253,7 +237,7 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
           Padding(
             padding: const EdgeInsets.only(
                 top: 0.0, left: 16.0, right: 16.0, bottom: 8.0),
-            child: Column( // Envolve em Column para adicionar o campo adicional
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 TextFormField(
@@ -265,7 +249,7 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
                   ),
                   keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-                  onChanged: (text) { // Adicionado onChanged para forçar rebuild se necessário
+                  onChanged: (text) {
                     if (mounted) setState(() {});
                   },
                   validator: (val) {
@@ -280,7 +264,7 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
                     return null;
                   },
                 ),
-                if (additionalField != null) ...[ // Adiciona o campo adicional se fornecido
+                if (additionalField != null) ...[
                   const SizedBox(height: 8.0),
                   additionalField,
                 ]
@@ -293,15 +277,10 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    bool temQuantidadeMel = (double.tryParse(
-        _quantidadeMelController.text.replaceAll(',', '.')) ??
-        0) >
-        0;
     bool temQuantidadePropolis = (double.tryParse(
         _quantidadePropolisController.text.replaceAll(',', '.')) ??
         0) >
-        0; // Usado para mostrar cor da própolis
-
+        0;
 
     return Scaffold(
       appBar: AppBar(
@@ -315,6 +294,7 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
+              // ... (widget de Data da Produção) ...
               Row(
                 children: [
                   Expanded(
@@ -333,6 +313,7 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
               ),
               const SizedBox(height: 20.0),
 
+              // ... (widget de Mel) ...
               Text('Mel',
                   style: Theme.of(context)
                       .textTheme
@@ -355,30 +336,27 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 12.0),
-
-              // REMOVIDO: Dropdown de cor do mel
-              // if (temQuantidadeMel) DropdownButtonFormField<String>(...),
-
 
               const SizedBox(height: 12.0),
               const Divider(),
               const SizedBox(height: 16.0),
 
+              // --- CORRIGIDO: Chamada do _buildProductSwitch para Cera de Abelha ---
               _buildProductSwitch(
-                title: 'Geleia Real',
-                value: _produzGeleiaReal,
+                title: 'Cera de Abelha', // Título que você já tinha mudado
+                value: _produzCeraAbelha, // Variável correta
                 onChanged: (bool val) {
                   setState(() {
-                    _produzGeleiaReal = val;
-                    if (!val) _quantidadeGeleiaRealController.clear();
+                    _produzCeraAbelha = val; // Lógica correta
+                    if (!val) _quantidadeCeraController.clear(); // Controller correto
                   });
                 },
-                controller: _quantidadeGeleiaRealController,
+                controller: _quantidadeCeraController, // Controller correto
                 quantityLabel: 'Quantidade (g)',
               ),
               const SizedBox(height: 16.0),
 
+              // ... (widget de Própolis) ...
               _buildProductSwitch(
                 title: 'Própolis',
                 value: _produzPropolis,
@@ -387,14 +365,12 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
                     _produzPropolis = val;
                     if (!val) {
                       _quantidadePropolisController.clear();
-                      _selectedCorPropolis = null; // Reseta cor se desabilitar
+                      _selectedCorPropolis = null;
                     }
-                    // O setState já vai reconstruir e o additionalField será avaliado
                   });
                 },
                 controller: _quantidadePropolisController,
-                quantityLabel: 'Quantidade (g ou mL)',
-                // NOVO: Adiciona o dropdown de cor da Própolis aqui
+                quantityLabel: 'Quantidade (g)',
                 additionalField: _produzPropolis && temQuantidadePropolis
                     ? DropdownButtonFormField<String>(
                   decoration: const InputDecoration(
@@ -422,25 +398,26 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
                     return null;
                   },
                 )
-                    : null, // Não mostra o dropdown se não for aplicável
+                    : null,
               ),
               const SizedBox(height: 16.0),
 
+              // ... (widget de Pólen) ...
               _buildProductSwitch(
-                title: 'Cera de Abelha',
-                value: _produzCera,
+                title: 'Pólen',
+                value: _produzPolen,
                 onChanged: (bool val) {
                   setState(() {
-                    _produzCera = val;
-                    if (!val) _quantidadeCeraController.clear();
+                    _produzPolen = val;
+                    if (!val) _quantidadePolenController.clear();
                   });
                 },
-                controller: _quantidadeCeraController,
-                quantityLabel: 'Quantidade (kg ou placas)',
+                controller: _quantidadePolenController,
+                quantityLabel: 'Quantidade (g)',
               ),
-              const SizedBox(height: 16.0),
-
               const SizedBox(height: 30.0),
+
+              // ... (botão de Salvar) ...
               ElevatedButton.icon(
                 icon: _isSalvando
                     ? Container(
@@ -466,4 +443,3 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
     );
   }
 }
-
