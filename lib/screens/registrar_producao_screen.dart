@@ -323,7 +323,7 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
               TextFormField(
                 controller: _quantidadeMelController,
                 decoration: const InputDecoration(
-                    labelText: 'Quantidade de Mel (kg ou L)',
+                    labelText: 'Quantidade de Mel (Kg)',
                     border: OutlineInputBorder()),
                 keyboardType:
                 const TextInputType.numberWithOptions(decimal: true),
@@ -352,7 +352,7 @@ class _RegistrarProducaoScreenState extends State<RegistrarProducaoScreen> {
                   });
                 },
                 controller: _quantidadeCeraController, // Controller correto
-                quantityLabel: 'Quantidade (g)',
+                quantityLabel: 'Quantidade (Kg)',
               ),
               const SizedBox(height: 16.0),
 

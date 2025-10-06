@@ -799,7 +799,7 @@ class _CaixaScreenState extends State<CaixaScreen>
     List<Widget> childrenDetalhes = [
       buildDetalheItem('Mel', producao['quantidadeMel'] != null ? '${(producao['quantidadeMel'] as num).toStringAsFixed(2)} Kg' : null),
       buildDetalheItem('Pólen', producao['quantidadePolen'] != null ? '${(producao['quantidadePolen'] as num).toStringAsFixed(2)} g' : null),
-      buildDetalheItem('Cera de abelha', producao['quantidadeCera'] != null ? '${(producao['quantidadeCera'] as num).toStringAsFixed(2)} g' : null),
+      buildDetalheItem('Cera de abelha', producao['quantidadeCera'] != null ? '${(producao['quantidadeCera'] as num).toStringAsFixed(2)} Kg' : null),
       buildDetalheItem('Própolis', producao['quantidadePropolis'] != null ? '${(producao['quantidadePropolis'] as num).toStringAsFixed(2)}g' : null, corPropolis: producao['corDaPropolis']?.toString()),
     ];
     if (producao['observacaoProducao'] != null && (producao['observacaoProducao'] as String).isNotEmpty) {
@@ -985,12 +985,5 @@ class _CaixaScreenState extends State<CaixaScreen>
       ),
     );
   }
-
-
-
-
-
-
-
 
 }

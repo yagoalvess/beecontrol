@@ -61,11 +61,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // COLE ESTA FUNÇÃO COMPLETA E CORRIGIDA NO LUGAR DA ANTIGA
+
   Future<String?> _showInputDialogParaCriacao(
       BuildContext context,
       String title,
-      String hintText,
-      List<String> predefinedOptions,
+      String hintText,      List<String> predefinedOptions,
       ) async {
     TextEditingController controller = TextEditingController();
     return showDialog<String>(
@@ -85,11 +86,45 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 1. CAMPO DE TEXTO AGORA VEM PRIMEIRO
+                TextField(
+                  controller: controller,
+                  decoration: InputDecoration(
+                    hintText: 'Ex: Apiário da Fazenda',
+                    labelText: 'Novo Nome do Local',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    prefixIcon: Icon(Icons.edit_location_alt, color: Theme.of(dialogContext).colorScheme.onSurface.withOpacity(0.6)),
+                    filled: true,
+                    fillColor: Theme.of(dialogContext).colorScheme.surfaceContainerHighest,
+                  ),
+                  autofocus: predefinedOptions.isEmpty,
+                  textCapitalization: TextCapitalization.words,
+                ),
+
+                // 2. DEPOIS O DIVISOR "OU" (se houver lista)
+                if (predefinedOptions.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    children: <Widget>[
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: Text("OU", style: TextStyle(color: Theme.of(dialogContext).colorScheme.outline)),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // 3. E POR ÚLTIMO A LISTA DE LOCAIS EXISTENTES
                 if (predefinedOptions.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8.0),
                     child: Text(
-                      "Ou selecione um local existente:",
+                      "Selecione um local existente:",
                       style: Theme.of(dialogContext).textTheme.titleSmall?.copyWith(
                         color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
                       ),
@@ -109,35 +144,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   );
                 }).toList(),
-                if (predefinedOptions.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Row(
-                    children: <Widget>[
-                      const Expanded(child: Divider()),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Text("OU", style: TextStyle(color: Theme.of(dialogContext).colorScheme.outline)),
-                      ),
-                      const Expanded(child: Divider()),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                TextField(
-                  controller: controller,
-                  decoration: InputDecoration(
-                    hintText: 'Ex: Apiário da Fazenda',
-                    labelText: 'Novo Nome do Local',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    prefixIcon: Icon(Icons.edit_location_alt, color: Theme.of(dialogContext).colorScheme.onSurface.withOpacity(0.6)),
-                    filled: true,
-                    fillColor: Theme.of(dialogContext).colorScheme.surfaceContainerHighest,
-                  ),
-                  autofocus: predefinedOptions.isEmpty,
-                  textCapitalization: TextCapitalization.words,
-                ),
               ],
             ),
           ),
@@ -172,6 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
   }
+
 
   void _criarNovaCaixa(BuildContext context) async {
     _showLoadingDialog(context, "Buscando locais...");
@@ -383,6 +390,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final List<_MenuItem> menuItensPrincipais = [
       _MenuItem("Ler Caixa", Icons.qr_code_scanner, Colors.deepOrange, () => _lerQRCode(context)),
       _MenuItem("Ver Colmeias", Icons.folder_open_outlined, Colors.purple, () => _verCaixasSalvas(context)),
+      _MenuItem(
+        "Criar Colmeia", // Nome mais curto e direto
+        Icons.add_box_outlined,
+        Colors.green.shade600, // Cor de destaque
+            () => _criarNovaCaixa(context), // Reutiliza a mesma função!
+      ),
+
       _MenuItem(
         "Relatórios Produção",
         Icons.insights,

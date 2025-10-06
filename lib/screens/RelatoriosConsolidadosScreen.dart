@@ -115,10 +115,10 @@ class _RelatoriosConsolidadosScreenState
         totaisGeraisProcessados.totalMel +=
             (registro['quantidadeMel'] as num?)?.toDouble() ?? 0.0;
 
-        dadosApiario.totalGeleiaReal +=
-            (registro['quantidadeGeleiaReal'] as num?)?.toDouble() ?? 0.0;
-        totaisGeraisProcessados.totalGeleiaReal +=
-            (registro['quantidadeGeleiaReal'] as num?)?.toDouble() ?? 0.0;
+        dadosApiario.totalPolen +=
+            (registro['quantidadePolen'] as num?)?.toDouble() ?? 0.0;
+        totaisGeraisProcessados.totalPolen +=
+            (registro['quantidadePolen'] as num?)?.toDouble() ?? 0.0;
 
         double qtdPropolis =
             (registro['quantidadePropolis'] as num?)?.toDouble() ?? 0.0;
@@ -150,7 +150,7 @@ class _RelatoriosConsolidadosScreenState
     setState(() {
       _dadosParaExportar = relatoriosProcessados;
       if (totaisGeraisProcessados.totalMel <= 0 &&
-          totaisGeraisProcessados.totalGeleiaReal <= 0 &&
+          totaisGeraisProcessados.totalPolen <= 0 &&
           totaisGeraisProcessados.totalPropolis <= 0 &&
           totaisGeraisProcessados.totalCera <= 0) {
         _totaisGeraisParaExportar = null;
@@ -497,8 +497,8 @@ class _RelatoriosConsolidadosScreenState
       ),
       body: TabBarView(
         controller: _tabController,
-        children: const [
-          RelatorioGraficoApiarioScreen(),
+        children:  [
+          RelatorioGraficoApiariosScreen(),
           RelatorioPorApiarioScreen(),
         ],
       ),
@@ -521,4 +521,3 @@ class _RelatoriosConsolidadosScreenState
     );
   }
 }
-

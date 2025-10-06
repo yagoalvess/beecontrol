@@ -1,218 +1,133 @@
-// lib/screens/relatorio_grafico_apiario_screen.dart
-import 'package:fl_chart/fl_chart.dart';
+// COLE ESTE CÓDIGO INTEIRO NO ARQUIVO:
+// C:/Users/Usuario/Documents/GitHub/beecontrol/lib/screens/relatorio_grafico_apiario_screen.dart
+
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:abelhas/services/historico_service.dart';
+import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:abelhas/screens/relatorio_por_apiario_screen.dart';
 
-// Importa APENAS a classe RelatorioApiarioData do outro arquivo de relatório.
-import 'package:abelhas/screens/relatorio_por_apiario_screen.dart' show RelatorioApiarioData;
-
-
-class RelatorioGraficoApiarioScreen extends StatefulWidget {
-  const RelatorioGraficoApiarioScreen({super.key});
+class RelatorioGraficoApiariosScreen extends StatefulWidget {
+  const RelatorioGraficoApiariosScreen({super.key});
 
   @override
-  State<RelatorioGraficoApiarioScreen> createState() =>
-      _RelatorioGraficoApiarioScreenState();
+  _RelatorioGraficoApiariosScreenState createState() =>
+      _RelatorioGraficoApiariosScreenState();
 }
 
-class _RelatorioGraficoApiarioScreenState
-    extends State<RelatorioGraficoApiarioScreen> {
+class _RelatorioGraficoApiariosScreenState
+    extends State<RelatorioGraficoApiariosScreen> {
   final HistoricoService _historicoService = HistoricoService();
   bool _isLoading = true;
-
   List<RelatorioApiarioData> _dadosRelatorioPorApiario = [];
   RelatorioApiarioData? _totaisGerais;
 
-  final List<Color> _coresGraficoBarras = [
-    Colors.orange.shade700, // Cor para Própolis 1
-    Colors.brown.shade600,  // Cor para Própolis 2
-    Colors.green.shade700,  // Cor para Geleia Real
-    Colors.blue.shade700,   // Cor para Cera
-    Colors.red.shade700,    // Cor adicional 1
-    Colors.purple.shade700, // Cor adicional 2
-    Colors.teal.shade700,
-    Colors.pink.shade600,
-    Colors.amber.shade700, // Cor para Mel (total)
-    Colors.cyan.shade600,
-    Colors.lime.shade700,
-  ];
+  // A lista de cores genéricas foi removida, pois agora as cores são específicas.
 
   @override
   void initState() {
     super.initState();
-    print("REL_GRAFICO_APIARIO: initState chamado");
     _carregarEProcessarDados();
   }
 
   Future<void> _carregarEProcessarDados() async {
-    if (!mounted) {
-      print("REL_GRAFICO_APIARIO: Widget não montado no início de _carregarEProcessarDados.");
-      return;
-    }
-    print("REL_GRAFICO_APIARIO: Iniciando _carregarEProcessarDados...");
-    setState(() {
-      _isLoading = true;
-    });
+    if (!mounted) return;
+    setState(() => _isLoading = true);
 
     try {
-      print("REL_GRAFICO_APIARIO: Buscando todos os registros de produção com local...");
-      final todosOsRegistrosComLocal =
-      await _historicoService.getTodosOsRegistrosDeProducaoComLocal();
-      print("REL_GRAFICO_APIARIO: ${todosOsRegistrosComLocal.length} registros encontrados.");
+      final todosRegistrosProducao = await _historicoService.getTodosOsRegistrosDeProducaoComLocal();
+      if (!mounted) return;
 
-      if (todosOsRegistrosComLocal.isEmpty) {
-        print("REL_GRAFICO_APIARIO: Nenhum registro encontrado. Limpando dados.");
-        if (mounted) {
-          setState(() {
-            _dadosRelatorioPorApiario = [];
-            _totaisGerais = null;
-            // _isLoading = false; // Será definido no finally
-          });
-        }
-      } else {
-        print("REL_GRAFICO_APIARIO: Agrupando registros por local...");
-        Map<String, List<Map<String, dynamic>>> registrosAgrupadosPorLocal = {};
-        for (var registro in todosOsRegistrosComLocal) {
-          String local =
-              registro['localApiario'] as String? ?? 'Local Não Especificado';
-          registrosAgrupadosPorLocal.putIfAbsent(local, () => []).add(registro);
-        }
-        print("REL_GRAFICO_APIARIO: ${registrosAgrupadosPorLocal.length} locais distintos encontrados.");
-
-        List<RelatorioApiarioData> relatoriosProcessados = [];
-        // Verificação de nulo para _totaisGerais antes de usar
-        _totaisGerais = RelatorioApiarioData(nomeApiario: "TOTAL GERAL DE TODOS OS APIÁRIOS");
-        print("REL_GRAFICO_APIARIO: Iniciando processamento por local...");
-
-        registrosAgrupadosPorLocal.forEach((local, registrosDoLocal) {
-          print("REL_GRAFICO_APIARIO: Processando local: $local (${registrosDoLocal.length} registros)");
-          RelatorioApiarioData dadosApiario = RelatorioApiarioData(nomeApiario: local);
-          Set<String> caixasComProducaoNoLocal = {};
-
-          for (var registro in registrosDoLocal) {
-            String? caixaIdOrigem = registro['originCaixaId'] as String?;
-            if (caixaIdOrigem != null) {
-              caixasComProducaoNoLocal.add(caixaIdOrigem);
-            }
-
-            try {
-              if (registro['dataProducao'] != null) {
-                DateTime dataAtual = DateTime.parse(registro['dataProducao'] as String);
-                if (dadosApiario.dataProducaoMaisAntiga == null ||
-                    dataAtual.isBefore(dadosApiario.dataProducaoMaisAntiga!)) {
-                  dadosApiario.dataProducaoMaisAntiga = dataAtual;
-                }
-                if (dadosApiario.dataProducaoMaisRecente == null ||
-                    dataAtual.isAfter(dadosApiario.dataProducaoMaisRecente!)) {
-                  dadosApiario.dataProducaoMaisRecente = dataAtual;
-                }
-                if (_totaisGerais != null) {
-                  if (_totaisGerais!.dataProducaoMaisAntiga == null ||
-                      dataAtual.isBefore(_totaisGerais!.dataProducaoMaisAntiga!)) {
-                    _totaisGerais!.dataProducaoMaisAntiga = dataAtual;
-                  }
-                  if (_totaisGerais!.dataProducaoMaisRecente == null ||
-                      dataAtual.isAfter(_totaisGerais!.dataProducaoMaisRecente!)) {
-                    _totaisGerais!.dataProducaoMaisRecente = dataAtual;
-                  }
-                }
-              }
-            } catch (e) {
-              print('REL_GRAFICO_APIARIO: Erro ao processar data de produção para o registro $registro: $e');
-            }
-
-            // Processamento de Mel (apenas total)
-            dadosApiario.totalMel += (registro['quantidadeMel'] as num?)?.toDouble() ?? 0.0;
-            if (_totaisGerais != null) {
-              _totaisGerais!.totalMel += (registro['quantidadeMel'] as num?)?.toDouble() ?? 0.0;
-            }
-
-            // REMOVIDO: lógica de somaPorCorMel
-            // double qtdMel = (registro['quantidadeMel'] as num?)?.toDouble() ?? 0.0;
-            // if (qtdMel > 0) {
-            //   dadosApiario.totalMel += qtdMel;
-            //   _totaisGerais!.totalMel += qtdMel;
-            //   String cor = registro['corDoMel'] as String? ?? 'Não Especificada';
-            //   dadosApiario.somaPorCorMel[cor] =
-            //       (dadosApiario.somaPorCorMel[cor] ?? 0) + qtdMel;
-            //   _totaisGerais!.somaPorCorMel[cor] =
-            //       (_totaisGerais!.somaPorCorMel[cor] ?? 0) + qtdMel;
-            // }
-
-            dadosApiario.totalGeleiaReal += (registro['quantidadeGeleiaReal'] as num?)?.toDouble() ?? 0.0;
-            if (_totaisGerais != null) {
-              _totaisGerais!.totalGeleiaReal += (registro['quantidadeGeleiaReal'] as num?)?.toDouble() ?? 0.0;
-            }
-
-            // Processamento de Própolis com Cor
-            double qtdPropolis = (registro['quantidadePropolis'] as num?)?.toDouble() ?? 0.0;
-            if (qtdPropolis > 0) {
-              dadosApiario.totalPropolis += qtdPropolis;
-              String corPropolis = registro['corDaPropolis'] as String? ?? 'Cor Não Especificada';
-              dadosApiario.somaPropolisPorCor[corPropolis] = (dadosApiario.somaPropolisPorCor[corPropolis] ?? 0) + qtdPropolis;
-              if (_totaisGerais != null) {
-                _totaisGerais!.totalPropolis += qtdPropolis;
-                _totaisGerais!.somaPropolisPorCor[corPropolis] = (_totaisGerais!.somaPropolisPorCor[corPropolis] ?? 0) + qtdPropolis;
-              }
-            }
-
-            dadosApiario.totalCera += (registro['quantidadeCera'] as num?)?.toDouble() ?? 0.0;
-            if (_totaisGerais != null) {
-              _totaisGerais!.totalCera += (registro['quantidadeCera'] as num?)?.toDouble() ?? 0.0;
-            }
-
-            // REMOVIDO: Apitoxina
-            // dadosApiario.totalApitoxina += (registro['quantidadeApitoxina'] as num?)?.toDouble() ?? 0.0;
-            // if (_totaisGerais != null) {
-            //   _totaisGerais!.totalApitoxina += (registro['quantidadeApitoxina'] as num?)?.toDouble() ?? 0.0;
-            // }
-          }
-          dadosApiario.numeroDeCaixasComProducao = caixasComProducaoNoLocal.length;
-          relatoriosProcessados.add(dadosApiario);
-          print("REL_GRAFICO_APIARIO: Local $local processado. Total Mel: ${dadosApiario.totalMel}");
-        });
-
-        print("REL_GRAFICO_APIARIO: Ordenando relatórios processados...");
-        relatoriosProcessados.sort((a, b) => a.nomeApiario.compareTo(b.nomeApiario));
-
-        if (mounted) {
-          print("REL_GRAFICO_APIARIO: Montando estado com dados processados.");
-          setState(() {
-            _dadosRelatorioPorApiario = relatoriosProcessados;
-            // Ajustar condição para verificar outros produtos se mel for zero
-            if (_totaisGerais != null &&
-                (_totaisGerais!.totalMel <= 0 &&
-                    _totaisGerais!.totalGeleiaReal <= 0 &&
-                    _totaisGerais!.totalPropolis <= 0 &&
-                    _totaisGerais!.totalCera <= 0)) {
-              _totaisGerais = null; // Define como nulo se não houver dados significativos
-            }
-            // _isLoading = false; // Será definido no finally
-          });
-        }
+      Map<String, List<Map<String, dynamic>>> registrosAgrupadosPorLocal = {};
+      for (var registro in todosRegistrosProducao) {
+        String local = registro['localApiario'] as String? ?? 'Local Não Especificado';
+        registrosAgrupadosPorLocal.putIfAbsent(local, () => []).add(registro);
       }
 
-      print("REL_GRAFICO_APIARIO: Processamento de dados concluído no try.");
+      List<RelatorioApiarioData> relatoriosProcessados = [];
+      _totaisGerais = RelatorioApiarioData(nomeApiario: "TOTAL GERAL DE TODOS OS APIÁRIOS");
 
+      registrosAgrupadosPorLocal.forEach((local, registrosDoLocal) {
+        RelatorioApiarioData dadosApiario = RelatorioApiarioData(nomeApiario: local);
+        Set<String> caixasComProducaoNoLocal = {};
+
+        for (var registro in registrosDoLocal) {
+          String? caixaIdOrigem = registro['originCaixaId'] as String?;
+          if (caixaIdOrigem != null) {
+            caixasComProducaoNoLocal.add(caixaIdOrigem);
+          }
+
+          try {
+            if (registro['dataProducao'] != null) {
+              DateTime dataAtual = DateTime.parse(registro['dataProducao'] as String);
+              if (dadosApiario.dataProducaoMaisAntiga == null || dataAtual.isBefore(dadosApiario.dataProducaoMaisAntiga!)) {
+                dadosApiario.dataProducaoMaisAntiga = dataAtual;
+              }
+              if (dadosApiario.dataProducaoMaisRecente == null || dataAtual.isAfter(dadosApiario.dataProducaoMaisRecente!)) {
+                dadosApiario.dataProducaoMaisRecente = dataAtual;
+              }
+            }
+          } catch (e) {
+            // ignora erro de data
+          }
+
+          dadosApiario.totalMel += (registro['quantidadeMel'] as num?)?.toDouble() ?? 0.0;
+          dadosApiario.totalCera += (registro['quantidadeCera'] as num?)?.toDouble() ?? 0.0;
+          dadosApiario.totalPolen += (registro['quantidadePolen'] as num?)?.toDouble() ?? 0.0;
+
+          double qtdPropolis = (registro['quantidadePropolis'] as num?)?.toDouble() ?? 0.0;
+          if (qtdPropolis > 0) {
+            dadosApiario.totalPropolis += qtdPropolis;
+            String corPropolis = registro['corDaPropolis'] as String? ?? 'Sem Cor';
+            dadosApiario.somaPropolisPorCor[corPropolis] = (dadosApiario.somaPropolisPorCor[corPropolis] ?? 0) + qtdPropolis;
+          }
+        }
+        dadosApiario.numeroDeCaixasComProducao = caixasComProducaoNoLocal.length;
+        relatoriosProcessados.add(dadosApiario);
+
+        if (_totaisGerais != null) {
+          _totaisGerais!.totalMel += dadosApiario.totalMel;
+          _totaisGerais!.totalCera += dadosApiario.totalCera;
+          _totaisGerais!.totalPolen += dadosApiario.totalPolen;
+          _totaisGerais!.totalPropolis += dadosApiario.totalPropolis;
+          dadosApiario.somaPropolisPorCor.forEach((cor, valor) {
+            _totaisGerais!.somaPropolisPorCor[cor] = (_totaisGerais!.somaPropolisPorCor[cor] ?? 0) + valor;
+          });
+
+          if (dadosApiario.dataProducaoMaisAntiga != null) {
+            if (_totaisGerais!.dataProducaoMaisAntiga == null || dadosApiario.dataProducaoMaisAntiga!.isBefore(_totaisGerais!.dataProducaoMaisAntiga!)) {
+              _totaisGerais!.dataProducaoMaisAntiga = dadosApiario.dataProducaoMaisAntiga;
+            }
+          }
+          if (dadosApiario.dataProducaoMaisRecente != null) {
+            if (_totaisGerais!.dataProducaoMaisRecente == null || dadosApiario.dataProducaoMaisRecente!.isAfter(_totaisGerais!.dataProducaoMaisRecente!)) {
+              _totaisGerais!.dataProducaoMaisRecente = dadosApiario.dataProducaoMaisRecente;
+            }
+          }
+        }
+      });
+
+      relatoriosProcessados.sort((a, b) => a.nomeApiario.compareTo(b.nomeApiario));
+
+      if (mounted) {
+        if (_totaisGerais != null &&
+            (_totaisGerais!.totalMel <= 0 &&
+                _totaisGerais!.totalPropolis <= 0 &&
+                _totaisGerais!.totalCera <= 0 &&
+                _totaisGerais!.totalPolen <= 0)) {
+          _totaisGerais = null;
+        }
+        setState(() {
+          _dadosRelatorioPorApiario = relatoriosProcessados;
+        });
+      }
     } catch (e, stackTrace) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao carregar dados para gráficos: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados para gráficos: $e')));
       }
-      print("REL_GRAFICO_APIARIO: ERRO CAPTURADO em _carregarEProcessarDados: $e");
-      print("REL_GRAFICO_APIARIO: StackTrace: $stackTrace");
+      print("REL_GRAFICO_APIARIO: ERRO: $e\n$stackTrace");
     } finally {
-      print("REL_GRAFICO_APIARIO: Bloco finally alcançado.");
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        print("REL_GRAFICO_APIARIO: _isLoading definido como false. Fim de _carregarEProcessarDados.");
-      } else {
-        print("REL_GRAFICO_APIARIO: Widget não montado no bloco finally.");
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -221,59 +136,51 @@ class _RelatorioGraficoApiarioScreenState
     return DateFormat('dd/MM/yyyy').format(data);
   }
 
-  // REMOVIDO: _buildGraficoBarrasMelPorCor
-  // Widget _buildGraficoBarrasMelPorCor(Map<String, double> dadosSomaPorCor) { ... }
+  // ===================================================================
+  // **[CORREÇÃO 1]** - Função auxiliar para pegar a cor da Própolis
+  // ===================================================================
+  Color _getCorParaPropolis(String corNome) {
+    switch (corNome.toLowerCase()) {
+      case 'verde':
+        return Colors.green.shade400;
+      case 'marrom':
+        return Colors.brown.shade400;
+      default:
+        return Colors.grey.shade500; // Cor padrão para "Outra", "Sem Cor", etc.
+    }
+  }
 
-
-  // NOVO: Gráfico de Barras para Própolis por Cor
   Widget _buildGraficoBarrasPropolisPorCor(Map<String, double> dadosSomaPropolisPorCor) {
     if (dadosSomaPropolisPorCor.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        child: Text('Nenhum registro de própolis com cor especificada.',
-            style: TextStyle(
-                fontSize: 14,
-                fontStyle: FontStyle.italic,
-                color: Colors.grey.shade600)),
-      );
+      return const SizedBox.shrink();
     }
-
     List<BarChartGroupData> barGroups = [];
     int x = 0;
-    int colorIndex = 0; // Reinicia o índice de cor para este gráfico
     double maxY = 0;
 
     dadosSomaPropolisPorCor.forEach((cor, total) {
       if (total > maxY) maxY = total;
-      barGroups.add(
-        BarChartGroupData(
-          x: x++,
-          barRods: [
-            BarChartRodData(
-              toY: total,
-              // Usar cores específicas para própolis se desejar, ou continuar com o ciclo
-              color: _coresGraficoBarras[colorIndex++ % _coresGraficoBarras.length],
-              width: 16,
-              borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(4), topRight: Radius.circular(4)),
-            ),
-          ],
-        ),
-      );
+      barGroups.add(BarChartGroupData(
+        x: x++,
+        barRods: [
+          BarChartRodData(
+            toY: total,
+            color: _getCorParaPropolis(cor), // Usa a função para definir a cor
+            width: 16,
+            borderRadius: const BorderRadius.only(topLeft: Radius.circular(4), topRight: Radius.circular(4)),
+          ),
+        ],
+      ));
     });
     maxY = (maxY * 1.2).ceilToDouble();
-    if (maxY == 0) maxY = 10; // Evita maxY 0 se todos os totais forem 0 (embora já verificado antes)
+    if (maxY == 0) maxY = 10;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
-          child: Text('Produção de Própolis por Cor (g/mL):',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600)),
+          child: Text('Produção de Própolis por Cor (g):', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
         ),
         SizedBox(
           height: 200,
@@ -284,21 +191,17 @@ class _RelatorioGraficoApiarioScreenState
               barTouchData: BarTouchData(
                 enabled: true,
                 touchTooltipData: BarTouchTooltipData(
-                  tooltipBgColor: Colors.brown.shade400,
+                  // ** ERRO CORRIGIDO AQUI **
+                  tooltipBgColor: Colors.blueGrey, // Propriedade correta
                   getTooltipItem: (group, groupIndex, rod, rodIndex) {
                     String cor = dadosSomaPropolisPorCor.keys.elementAt(group.x);
                     return BarTooltipItem(
                       '$cor\n',
-                      const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold),
+                      const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                       children: <TextSpan>[
                         TextSpan(
                           text: rod.toY.toStringAsFixed(1),
-                          style: const TextStyle(
-                            color: Colors.yellow,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: const TextStyle(color: Colors.yellow, fontSize: 14, fontWeight: FontWeight.w500),
                         ),
                       ],
                     );
@@ -315,18 +218,8 @@ class _RelatorioGraficoApiarioScreenState
                       final index = value.toInt();
                       if (index >= 0 && index < dadosSomaPropolisPorCor.keys.length) {
                         String label = dadosSomaPropolisPorCor.keys.elementAt(index);
-                        if (label.length > 10) label = '${label.substring(0,8)}...';
-                        return SideTitleWidget(
-                          axisSide: meta.axisSide,
-                          space: 4,
-                          child: Text(
-                            label,
-                            style: const TextStyle(
-                                color: Colors.black87,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10),
-                          ),
-                        );
+                        if (label.length > 10) label = '${label.substring(0, 8)}...';
+                        return SideTitleWidget(axisSide: meta.axisSide, space: 4, child: Text(label, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 10)));
                       }
                       return const Text('');
                     },
@@ -337,7 +230,7 @@ class _RelatorioGraficoApiarioScreenState
                     showTitles: true,
                     reservedSize: 36,
                     getTitlesWidget: (value, meta) {
-                      if (value == 0 || value == maxY || value % (maxY / (maxY > 20 ? 4:2)).ceilToDouble() == 0 ) {
+                      if (value == 0 || value == maxY || value % (maxY / (maxY > 20 ? 4 : 2)).ceilToDouble() == 0) {
                         return Text(value.toInt().toString(), style: const TextStyle(fontSize: 10));
                       }
                       return const Text('');
@@ -352,12 +245,7 @@ class _RelatorioGraficoApiarioScreenState
               gridData: FlGridData(
                 show: true,
                 drawVerticalLine: false,
-                getDrawingHorizontalLine: (value) {
-                  return FlLine(
-                    color: Colors.grey.shade300,
-                    strokeWidth: 0.8,
-                  );
-                },
+                getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.shade300, strokeWidth: 0.8),
               ),
             ),
           ),
@@ -366,48 +254,46 @@ class _RelatorioGraficoApiarioScreenState
     );
   }
 
+  // ===================================================================
+  // **[CORREÇÃO 2]** - Função auxiliar para pegar a cor de Outros Produtos
+  // ===================================================================
+  Color _getCorParaOutroProduto(String nomeProduto) {
+    if (nomeProduto.toLowerCase().contains('pólen')) {
+      return Colors.amber.shade600; // Amarelo/Dourado para o Pólen
+    }
+    if (nomeProduto.toLowerCase().contains('cera')) {
+      return Colors.yellow.shade300; // Amarelo claro para a Cera
+    }
+    return Colors.teal.shade300; // Cor padrão (fallback)
+  }
 
   Widget _buildGraficoBarrasOutrosProdutos(RelatorioApiarioData dados) {
     Map<String, double> outrosProdutosData = {
-      // Própolis será exibida em seu próprio gráfico por cor
-      if (dados.totalGeleiaReal > 0) 'Geleia R. (g)': dados.totalGeleiaReal,
-      if (dados.totalCera > 0) 'Cera (kg/pl)': dados.totalCera,
-      // REMOVIDO: Apitoxina
-      // if (dados.totalApitoxina > 0) 'Apitoxina (g)': dados.totalApitoxina,
+      if (dados.totalCera > 0) 'Cera (kg)': dados.totalCera,
+      if (dados.totalPolen > 0) 'Pólen (g)': dados.totalPolen,
     };
 
     if (outrosProdutosData.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        child: Text('Nenhum outro produto (Geleia Real, Cera) registrado.', // Mensagem ajustada
-            style: TextStyle(
-                fontSize: 14,
-                fontStyle: FontStyle.italic,
-                color: Colors.grey.shade600)),
-      );
+      return const SizedBox.shrink();
     }
 
     List<BarChartGroupData> barGroups = [];
     int x = 0;
-    int colorIndex = 2; // Começa de um índice de cor diferente para não repetir o da Própolis imediatamente
     double maxY = 0;
 
     outrosProdutosData.forEach((nome, total) {
       if (total > maxY) maxY = total;
-      barGroups.add(
-        BarChartGroupData(
-          x: x++,
-          barRods: [
-            BarChartRodData(
-              toY: total,
-              color: _coresGraficoBarras[colorIndex++ % _coresGraficoBarras.length],
-              width: 22,
-              borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(4), topRight: Radius.circular(4)),
-            ),
-          ],
-        ),
-      );
+      barGroups.add(BarChartGroupData(
+        x: x++,
+        barRods: [
+          BarChartRodData(
+            toY: total,
+            color: _getCorParaOutroProduto(nome), // Usa a função para definir a cor
+            width: 22,
+            borderRadius: const BorderRadius.only(topLeft: Radius.circular(4), topRight: Radius.circular(4)),
+          ),
+        ],
+      ));
     });
     maxY = (maxY * 1.2).ceilToDouble();
     if (maxY == 0) maxY = 10;
@@ -417,37 +303,28 @@ class _RelatorioGraficoApiarioScreenState
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
-          child: Text('Outros Produtos (Geleia Real, Cera):', // Título ajustado
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600)),
+          child: Text('Outros Produtos:', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
         ),
         SizedBox(
           height: 200,
           child: BarChart(
             BarChartData(
-              // ... (configurações do BarChartData, similares ao anterior)
               alignment: BarChartAlignment.spaceAround,
               maxY: maxY,
               barTouchData: BarTouchData(
                 enabled: true,
                 touchTooltipData: BarTouchTooltipData(
-                  tooltipBgColor: Colors.teal,
+                  // ** ERRO CORRIGIDO AQUI **
+                  tooltipBgColor: Colors.blueGrey, // Propriedade correta
                   getTooltipItem: (group, groupIndex, rod, rodIndex) {
                     String nome = outrosProdutosData.keys.elementAt(group.x);
                     return BarTooltipItem(
                       '$nome\n',
-                      const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold),
+                      const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                       children: <TextSpan>[
                         TextSpan(
-                          text: rod.toY.toStringAsFixed(1),
-                          style: const TextStyle(
-                            color: Colors.yellow,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          text: rod.toY.toStringAsFixed(2),
+                          style: const TextStyle(color: Colors.yellow, fontSize: 14, fontWeight: FontWeight.w500),
                         ),
                       ],
                     );
@@ -465,20 +342,9 @@ class _RelatorioGraficoApiarioScreenState
                       if (index >= 0 && index < outrosProdutosData.keys.length) {
                         String label = outrosProdutosData.keys.elementAt(index);
                         RegExpMatch? match = RegExp(r'\(([^)]+)\)$').firstMatch(label);
-                        if (match != null) {
-                          label = label.substring(0, match.start).trim();
-                        }
-                        if (label.length > 10) label = '${label.substring(0,8)}...';
-
-                        return SideTitleWidget(
-                          axisSide: meta.axisSide,
-                          space: 4,
-                          child: Text(label,
-                              style: const TextStyle(
-                                  color: Colors.black87,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 10)),
-                        );
+                        if (match != null) label = label.substring(0, match.start).trim();
+                        if (label.length > 10) label = '${label.substring(0, 8)}...';
+                        return SideTitleWidget(axisSide: meta.axisSide, space: 4, child: Text(label, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 10)));
                       }
                       return const Text('');
                     },
@@ -489,7 +355,7 @@ class _RelatorioGraficoApiarioScreenState
                     showTitles: true,
                     reservedSize: 36,
                     getTitlesWidget: (value, meta) {
-                      if (value == 0 || value == maxY || value % (maxY / (maxY > 20 ? 4:2)).ceilToDouble() == 0 ) {
+                      if (value == 0 || value == maxY || value % (maxY / (maxY > 20 ? 4 : 2)).ceilToDouble() == 0) {
                         return Text(value.toInt().toString(), style: const TextStyle(fontSize: 10));
                       }
                       return const Text('');
@@ -504,12 +370,7 @@ class _RelatorioGraficoApiarioScreenState
               gridData: FlGridData(
                 show: true,
                 drawVerticalLine: false,
-                getDrawingHorizontalLine: (value) {
-                  return FlLine(
-                    color: Colors.grey.shade300,
-                    strokeWidth: 0.8,
-                  );
-                },
+                getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.shade300, strokeWidth: 0.8),
               ),
             ),
           ),
@@ -518,213 +379,124 @@ class _RelatorioGraficoApiarioScreenState
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
-    print("REL_GRAFICO_APIARIO: Build chamado. isLoading: $_isLoading, Dados Apiario: ${_dadosRelatorioPorApiario.length}, Totais Gerais Mel: ${_totaisGerais?.totalMel}");
-
-    bool semDadosGerais = _totaisGerais == null ||
-        (_totaisGerais!.totalMel <= 0 &&
-            _totaisGerais!.totalPropolis <= 0 && // Incluindo própolis na verificação
-            _totaisGerais!.totalGeleiaReal <= 0 &&
-            _totaisGerais!.totalCera <= 0);
+    // Lógica para verificar se há dados para exibir (não alterada)
+    bool semDados = _dadosRelatorioPorApiario.every((d) => d.totalMel <= 0 && d.totalCera <= 0 && d.totalPolen <= 0 && d.totalPropolis <= 0) && _totaisGerais == null;
 
     return Scaffold(
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _dadosRelatorioPorApiario.isEmpty && semDadosGerais
+          : semDados
           ? Center(
         child: Padding(
-          padding: const EdgeInsets.all(20.0),
+          padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.bar_chart_outlined,
-                  size: 60.0, color: Colors.grey.shade400),
-              const SizedBox(height: 16.0),
-              Text(
-                  'Nenhum dado de produção encontrado para gerar relatórios gráficos.',
-                  style: TextStyle(
-                      fontSize: 18.0, color: Colors.grey.shade600),
-                  textAlign: TextAlign.center),
+              Icon(Icons.pie_chart_outline, size: 60, color: Colors.grey.shade400),
+              const SizedBox(height: 16),
+              Text('Nenhuma produção encontrada para exibir nos gráficos.', style: Theme.of(context).textTheme.titleMedium, textAlign: TextAlign.center),
             ],
           ),
         ),
       )
           : RefreshIndicator(
         onRefresh: _carregarEProcessarDados,
-        child: ListView.builder(
-          itemCount: _dadosRelatorioPorApiario.length +
-              (semDadosGerais ? 0 : 1),
-          itemBuilder: (context, index) {
-            if (index == _dadosRelatorioPorApiario.length && !semDadosGerais) {
-              print("REL_GRAFICO_APIARIO: Construindo card de Totais Gerais.");
-              return Card(
-                margin: const EdgeInsets.symmetric(
-                    vertical: 8.0, horizontal: 10.0),
-                elevation: 3,
-                color: Colors.blueGrey.shade50,
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: _buildConteudoRelatorioGrafico(
-                      _totaisGerais!, // Se !semDadosGerais, _totaisGerais não é null
-                      isTotalGeral: true),
-                ),
-              );
-            }
-            if (index < _dadosRelatorioPorApiario.length) {
-              final dadosApiario = _dadosRelatorioPorApiario[index];
-              // Não mostrar card do apiário se ele não tiver nenhuma produção relevante
-              if (dadosApiario.totalMel <= 0 &&
-                  dadosApiario.totalGeleiaReal <= 0 &&
-                  dadosApiario.totalPropolis <= 0 &&
-                  dadosApiario.totalCera <= 0) {
-                return const SizedBox.shrink();
-              }
-              print("REL_GRAFICO_APIARIO: Construindo ExpansionTile para ${dadosApiario.nomeApiario}");
-              return Card(
-                margin: const EdgeInsets.symmetric(
-                    vertical: 8.0, horizontal: 10.0),
-                elevation: 2,
-                child: ExpansionTile(
-                  iconColor: Theme.of(context).primaryColor,
-                  collapsedIconColor: Colors.grey.shade700,
-                  title: Text(
-                    dadosApiario.nomeApiario,
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color:
-                        Theme.of(context).primaryColorDark),
-                  ),
-                  subtitle: Text(
-                      'Caixas com produção: ${dadosApiario.numeroDeCaixasComProducao} | Período: ${_formatarData(dadosApiario.dataProducaoMaisAntiga)} a ${_formatarData(dadosApiario.dataProducaoMaisRecente)}',
-                      style: TextStyle(
-                          fontSize: 12.5,
-                          color: Colors.grey.shade600),
-                      overflow: TextOverflow.ellipsis),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16.0)
-                          .copyWith(top: 0),
-                      child: _buildConteudoRelatorioGrafico(
-                          dadosApiario),
-                    )
-                  ],
-                ),
-              );
-            }
-            return const SizedBox.shrink();
-          },
+        child: ListView(
+          padding: const EdgeInsets.only(top: 8, bottom: 80),
+          children: [
+            // Lógica de ordenação (apiários primeiro, total geral por último)
+            ..._dadosRelatorioPorApiario
+                .where((dados) => dados.totalMel > 0 || dados.totalCera > 0 || dados.totalPolen > 0 || dados.totalPropolis > 0)
+                .map((dados) => _buildCardRelatorio(dados))
+                .toList(),
+            if (_totaisGerais != null) _buildCardRelatorio(_totaisGerais!, isTotalGeral: true),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildConteudoRelatorioGrafico(RelatorioApiarioData dados,
-      {bool isTotalGeral = false}) {
-    print("REL_GRAFICO_APIARIO: Construindo conteúdo para ${dados.nomeApiario}. Total Mel: ${dados.totalMel}");
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        if (!isTotalGeral) ...[
-          Text(
-            'Período de Produção (Apiário):',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(
-                fontWeight: FontWeight.bold, color: Colors.green.shade700),
-          ),
-          Text(
-            'De: ${_formatarData(dados.dataProducaoMaisAntiga)}   Até: ${_formatarData(dados.dataProducaoMaisRecente)}',
-          ),
-          if (dados.numeroDeCaixasComProducao > 0)
-            Text(
-                'Número de caixas com produção: ${dados.numeroDeCaixasComProducao}'),
-          const SizedBox(height: 16.0),
-          const Divider(),
-        ],
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: Text(
-            isTotalGeral ? 'Total Geral de Mel' : 'Produção de Mel (Apiário)',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Colors.amber.shade800,
-                fontSize: isTotalGeral ? 18 : 17),
+  Widget _buildCardRelatorio(RelatorioApiarioData dados, {bool isTotalGeral = false}) {
+    if (isTotalGeral) {
+      // Card de Total Geral (não expansível)
+      return Card(
+        elevation: 4.0,
+        margin: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+        color: Colors.blueGrey.shade50,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(dados.nomeApiario, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.blueGrey.shade800)),
+              const Divider(height: 24),
+              Text('Mel Produzido: ${dados.totalMel.toStringAsFixed(2)} Kg', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 16),
+              _buildGraficoBarrasPropolisPorCor(dados.somaPropolisPorCor),
+              _buildGraficoBarrasOutrosProdutos(dados),
+              if (dados.totalMel <= 0 && dados.totalPropolis <= 0 && dados.totalCera <= 0 && dados.totalPolen <= 0)
+                Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 24.0), child: Text("Nenhuma produção registrada no período.", style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey.shade600)))),
+              const Divider(height: 32, thickness: 1),
+              if (dados.dataProducaoMaisAntiga != null && dados.dataProducaoMaisRecente != null)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text('Período Geral: ${_formatarData(dados.dataProducaoMaisAntiga)} a ${_formatarData(dados.dataProducaoMaisRecente)}', style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+            ],
           ),
         ),
-        // Exibe apenas o total de mel em texto
-        if (dados.totalMel > 0)
+      );
+    }
+
+    // Cards de Apiários Individuais (expansíveis)
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        iconColor: Theme.of(context).primaryColor,
+        collapsedIconColor: Colors.grey.shade700,
+        title: Text(
+          dados.nomeApiario,
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).primaryColorDark),
+        ),
+        subtitle: Text(
+            'Caixas com produção: ${dados.numeroDeCaixasComProducao} | Período: ${_formatarData(dados.dataProducaoMaisAntiga)} a ${_formatarData(dados.dataProducaoMaisRecente)}',
+            style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+            overflow: TextOverflow.ellipsis),
+        children: [
           Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            padding: const EdgeInsets.all(16.0).copyWith(top: 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                    isTotalGeral
-                        ? 'TOTAL GERAL DE MEL:'
-                        : 'TOTAL MEL (APIÁRIO):',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold, fontSize: 15)),
-                const SizedBox(width: 8),
-                Text('${dados.totalMel.toStringAsFixed(2)} kg/L',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.amber.shade900,
-                        fontSize: 15)),
+                const SizedBox(height: 8),
+                if (dados.totalMel > 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('TOTAL MEL (APIÁRIO):', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, fontSize: 15)),
+                        Text('${dados.totalMel.toStringAsFixed(2)} kg/L', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.amber.shade900, fontSize: 15)),
+                      ],
+                    ),
+                  ),
+                _buildGraficoBarrasPropolisPorCor(dados.somaPropolisPorCor),
+                _buildGraficoBarrasOutrosProdutos(dados),
+                if (dados.totalPropolis <= 0 && dados.totalCera <= 0 && dados.totalPolen <= 0 && dados.totalMel <= 0)
+                  Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 24.0), child: Text("Nenhuma produção registrada para este apiário.", style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey.shade600)))),
               ],
             ),
           )
-        else
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Text('Nenhum registro de mel.',
-                style: TextStyle(
-                    fontSize: 14,
-                    fontStyle: FontStyle.italic,
-                    color: Colors.grey.shade600)),
-          ),
-
-        // REMOVIDO: _buildGraficoBarrasMelPorCor(dados.somaPorCorMel),
-        // const SizedBox(height: 8.0), // Já tem padding no if/else acima
-
-        // Se houver própolis por cor, mostra o gráfico específico
-        if (dados.somaPropolisPorCor.isNotEmpty) ...[
-          const Divider(),
-          _buildGraficoBarrasPropolisPorCor(dados.somaPropolisPorCor),
-        ] else if (dados.totalPropolis > 0) ... [ // Senão, se houver total de própolis, mostra o total
-          const Divider(),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Text(
-                'Própolis (Total): ${dados.totalPropolis.toStringAsFixed(2)} g/mL',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.brown.shade700)
-            ),
-          ),
-        ], // Adicionar vírgula aqui se houver mais widgets abaixo no Column principal
-
-        const SizedBox(height: 16.0),
-        const Divider(),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: Text(
-            isTotalGeral ? 'Totais Gerais - Outros Produtos (Geleia Real, Cera)' : 'Outros Produtos (Geleia Real, Cera)',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Colors.teal.shade600,
-                fontSize: isTotalGeral ? 18 : 17),
-          ),
-        ),
-        _buildGraficoBarrasOutrosProdutos(dados), // Este método agora só lida com Geleia Real e Cera
-      ],
+        ],
+      ),
     );
   }
 }
-
