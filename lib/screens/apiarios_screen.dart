@@ -1,5 +1,3 @@
-// ARQUIVO ATUALIZADO E FINAL: C:/Users/Usuario/Documents/GitHub/beecontrol/lib/screens/apiarios_screen.dart
-
 import 'package:flutter/material.dart';
 import 'dart:async'; // Para Timer (debounce)
 import 'caixa_screen.dart';
@@ -14,13 +12,13 @@ class ApiariosScreen extends StatefulWidget {
 
 class _ApiariosScreenState extends State<ApiariosScreen> {
   final TextEditingController _searchController = TextEditingController();
-  List<Map<String, dynamic>> _todasAsCaixas = [];
-  Map<String, List<Map<String, dynamic>>> _caixasAgrupadasPorLocal = {};
-  List<String> _locaisOrdenados = [];
+  final HistoricoService _historicoService = HistoricoService();
 
-  // ## INÍCIO DA ALTERAÇÃO 1/6 (NOVO) ##
-  List<String> _todosOsLocaisPersistentes = [];
-  // ## FIM DA ALTERAÇÃO 1/6 ##
+  List<Map<String, dynamic>> _todasAsCaixas = [];
+  List<String> _todosOsLocaisSalvos = []; 
+  
+  Map<String, List<Map<String, dynamic>>> _caixasAgrupadasFiltradas = {};
+  List<String> _locaisOrdenadosParaExibicao = [];
 
   bool _isLoading = true;
   Timer? _debounce;
@@ -40,111 +38,105 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
     super.dispose();
   }
 
-  // ## INÍCIO DA ALTERAÇÃO 2/6 (MODIFICADO) ##
   Future<void> _fetchAndGroupCaixas() async {
     if (mounted) setState(() => _isLoading = true);
+    
+    try {
+      final results = await Future.wait([
+        _historicoService.getTodasCaixasComLocal(),
+        _historicoService.getTodosOsLocais(),
+      ]);
 
-    final historicoService = HistoricoService();
-    // Busca as duas listas em paralelo para otimizar
-    final results = await Future.wait([
-      historicoService.getTodasCaixasComLocal(),
-      historicoService.getTodosOsLocais(),
-    ]);
+      if (!mounted) return;
 
-    if (!mounted) return;
+      final caixas = results[0] as List<Map<String, dynamic>>;
+      final locais = results[1] as List<String>;
 
-    final caixas = results[0] as List<Map<String, dynamic>>;
-    final locaisPersistentes = results[1] as List<String>;
+      final caixasValidas = caixas
+          .where((caixa) => caixa['id'] != null && caixa['id'].toString().isNotEmpty)
+          .toList();
 
-    final caixasValidas = caixas.where((caixa) => caixa['id'] != null && caixa['id'].toString().isNotEmpty).toList();
+      setState(() {
+        _todasAsCaixas = caixasValidas;
+        _todosOsLocaisSalvos = locais;
+        _filterCaixas();
+      });
 
-    _todasAsCaixas = caixasValidas;
-    _todosOsLocaisPersistentes = locaisPersistentes;
-    _filterCaixas();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao carregar dados: ${e.toString()}'))
+        );
+        setState(() => _isLoading = false);
+      }
+    }
   }
-  // ## FIM DA ALTERAÇÃO 2/6 ##
 
   void _onSearchChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 400), () {
+    _debounce = Timer(const Duration(milliseconds: 300), () {
       if (mounted) {
         _filterCaixas();
       }
     });
   }
 
-  // ## INÍCIO DA ALTERAÇÃO 3/6 (REESTRUTURADO) ##
   void _filterCaixas() {
     if (!mounted) return;
 
-    final query = _searchController.text.trim();
-    Map<String, List<Map<String, dynamic>>> agrupadasResultado = {};
-
-    // Inicia o mapa de resultados com TODOS os locais persistentes, cada um com uma lista vazia.
-    for (var local in _todosOsLocaisPersistentes) {
-      agrupadasResultado[local] = [];
-    }
-
-    List<Map<String, dynamic>> listaParaFiltrar = _todasAsCaixas;
-
-    // A lógica de filtragem por busca continua a mesma, atuando sobre as CAIXAS
-    if (query.isNotEmpty) {
-      final isNumericQuery = int.tryParse(query) != null;
-      listaParaFiltrar = _todasAsCaixas.where((caixa) {
-        final id = caixa['id'] as String? ?? '';
-        final local = caixa['local'] as String? ?? '';
-        final queryLowerCase = query.toLowerCase();
-        if (isNumericQuery) {
-          final String numeroId = id.replaceAll(RegExp(r'[^0-9]'), '');
-          final int? numeroIdInt = int.tryParse(numeroId);
-          if (numeroIdInt != null && numeroIdInt.toString() == query) {
-            return true;
-          }
-        }
-        if (!isNumericQuery) {
-          return local.toLowerCase().contains(queryLowerCase) || id.toLowerCase().contains(queryLowerCase);
-        }
-        return false;
-      }).toList();
-    }
-
-    // Popula o mapa de resultados com as caixas (já filtradas ou todas)
-    for (var caixa in listaParaFiltrar) {
+    final query = _searchController.text.trim().toLowerCase();
+    
+    final Map<String, List<Map<String, dynamic>>> caixasAgrupadas = {};
+    for (var caixa in _todasAsCaixas) {
       final local = caixa['local']?.toString() ?? 'Local não definido';
-      if (agrupadasResultado.containsKey(local)) {
-        agrupadasResultado[local]!.add(caixa);
-      } else {
-        agrupadasResultado[local] = [caixa];
-      }
+      caixasAgrupadas.putIfAbsent(local, () => []).add(caixa);
     }
-
-    List<String> locaisFinais;
-    // Se houver uma busca ativa, mostramos apenas os locais que têm caixas correspondentes.
-    if (query.isNotEmpty) {
-      locaisFinais = agrupadasResultado.keys.where((local) => agrupadasResultado[local]!.isNotEmpty).toList();
+    
+    List<String> locaisParaExibir;
+    if (query.isEmpty) {
+      locaisParaExibir = List.from(_todosOsLocaisSalvos);
+      _caixasAgrupadasFiltradas = caixasAgrupadas;
     } else {
-      // Se não houver busca, a lista de locais a exibir é a lista completa e persistente.
-      locaisFinais = _todosOsLocaisPersistentes;
+      final List<Map<String, dynamic>> caixasFiltradas = _todasAsCaixas.where((caixa) {
+        final id = (caixa['id'] as String? ?? '').toLowerCase();
+        final local = (caixa['local'] as String? ?? '').toLowerCase();
+        
+        final numericId = id.replaceAll(RegExp(r'[^0-9]'), '');
+        final queryAsInt = int.tryParse(query);
+        final idAsInt = int.tryParse(numericId);
+
+        if (queryAsInt != null && idAsInt != null) {
+          return idAsInt == queryAsInt;
+        }
+        
+        return local.contains(query) || id.contains(query);
+      }).toList();
+
+      final Map<String, List<Map<String, dynamic>>> caixasAgrupadasQuery = {};
+       for (var caixa in caixasFiltradas) {
+        final local = caixa['local']?.toString() ?? 'Local não definido';
+        caixasAgrupadasQuery.putIfAbsent(local, () => []).add(caixa);
+      }
+      
+      locaisParaExibir = caixasAgrupadasQuery.keys.toList();
+      _caixasAgrupadasFiltradas = caixasAgrupadasQuery;
     }
 
-    // Mantendo a ordenação original do seu código.
-    locaisFinais.sort();
-
-    if (locaisFinais.contains('Local não definido')) {
-      locaisFinais.remove('Local não definido');
-      locaisFinais.add('Local não definido');
+    locaisParaExibir.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    
+    if (locaisParaExibir.contains('Local não definido')) {
+      locaisParaExibir.remove('Local não definido');
+      locaisParaExibir.add('Local não definido');
     }
 
     setState(() {
-      _caixasAgrupadasPorLocal = agrupadasResultado;
-      _locaisOrdenados = locaisFinais;
+      _locaisOrdenadosParaExibicao = locaisParaExibir;
       _isLoading = false;
     });
   }
-  // ## FIM DA ALTERAÇÃO 3/6 ##
 
-  void _navegarParaCaixa(BuildContext context, String caixaId, String localCaixa) {
-    Navigator.push(
+  void _navegarParaCaixa(BuildContext context, String caixaId, String localCaixa) async {
+    final bool? recarregar = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (context) => CaixaScreen(
@@ -152,14 +144,15 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
           localCaixa: localCaixa,
         ),
       ),
-      // O .then() que recarregava a tela foi removido para manter o código original.
-      // O recarregamento agora deve ser feito manualmente pelo usuário se necessário (ex: voltando para a home e abrindo a tela de novo).
     );
+
+    if (recarregar == true && mounted) {
+      _fetchAndGroupCaixas();
+    }
   }
 
   Future<void> _excluirCaixa(String caixaId) async {
-    final historicoService = HistoricoService();
-    await historicoService.removerCaixa(caixaId);
+    await _historicoService.removerCaixa(caixaId);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Colmeia excluída com sucesso!')),
@@ -167,17 +160,24 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
     _fetchAndGroupCaixas();
   }
 
-  // ## INÍCIO DA ALTERAÇÃO 4/6 (NOVO) ##
-  Future<void> _excluirLocal(String local) async {
-    final historicoService = HistoricoService();
-    await historicoService.removerLocalPermanente(local);
+  // ===================================================================
+  // **[NOVA FUNÇÃO]** - Para excluir um local/apiário vazio
+  // ===================================================================
+  Future<void> _excluirLocalVazio(String local) async {
+    final bool success = await _historicoService.removerLocalPermanente(local);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Local "$local" excluído com sucesso!')),
-    );
-    _fetchAndGroupCaixas();
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Apiário "$local" excluído com sucesso!')),
+      );
+      _fetchAndGroupCaixas(); 
+    } else {
+       ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao excluir o apiário "$local".')),
+      );
+    }
   }
-  // ## FIM DA ALTERAÇÃO 4/6 ##
 
   Future<void> _editarCaixa(String caixaId, String localAtual) async {
     String? novoLocal = await _showSimpleInputDialog(
@@ -189,8 +189,7 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
     if (!mounted) return;
 
     if (novoLocal != null && novoLocal.trim().isNotEmpty && novoLocal.trim().toLowerCase() != localAtual.toLowerCase().trim()) {
-      final historicoService = HistoricoService();
-      await historicoService.atualizarLocalDaCaixa(caixaId, novoLocal.trim());
+      await _historicoService.atualizarLocalDaCaixa(caixaId, novoLocal.trim());
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Local da colmeia atualizado com sucesso!')),
@@ -198,8 +197,8 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
       _fetchAndGroupCaixas();
     }
   }
-
-  Future<String?> _showSimpleInputDialog(
+  
+    Future<String?> _showSimpleInputDialog(
       BuildContext context,
       String title,
       String hintText, {
@@ -240,21 +239,23 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ## INÍCIO DA ALTERAÇÃO 5/6 (MODIFICADO) ##
-    // A condição para mostrar a tela vazia agora verifica a lista de locais persistentes.
-    final bool shouldShowEmptyScreen = _todosOsLocaisPersistentes.isEmpty && _searchController.text.isEmpty && !_isLoading;
-    // ## FIM DA ALTERAÇÃO 5/6 ##
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Minhas Colmeias'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Recarregar Lista',
+            onPressed: _fetchAndGroupCaixas,
+          )
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
@@ -265,7 +266,7 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
                   borderSide: BorderSide.none,
                 ),
                 filled: true,
-                fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
                   icon: const Icon(Icons.clear),
@@ -279,38 +280,43 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
             ),
           ),
           Expanded(
-            child: shouldShowEmptyScreen // <-- Variável usada aqui
-                ? const Center(child: Text('Nenhuma colmeia salva ainda.\nCrie novas colmeias na tela inicial.'))
-                : _locaisOrdenados.isEmpty && !_isLoading
+            child: !_isLoading && _todosOsLocaisSalvos.isEmpty
+                ? const Center(
+                    child: Text('Nenhum apiário criado ainda.\nCrie novos apiários na tela inicial.', textAlign: TextAlign.center,)
+                  )
+                : !_isLoading && _locaisOrdenadosParaExibicao.isEmpty && _searchController.text.isNotEmpty
                 ? Center(child: Text('Nenhum resultado para "${_searchController.text}".'))
                 : ListView.builder(
-              itemCount: _locaisOrdenados.length,
+              itemCount: _locaisOrdenadosParaExibicao.length,
               padding: const EdgeInsets.only(bottom: 16.0),
               itemBuilder: (context, indexLocal) {
-                final local = _locaisOrdenados[indexLocal];
-                final caixasDoLocal = _caixasAgrupadasPorLocal[local] ?? [];
-
-                // ## INÍCIO DA ALTERAÇÃO 6/6 (WIDGET ENVOLVIDO COM DISMISSIBLE) ##
+                final local = _locaisOrdenadosParaExibicao[indexLocal];
+                final caixasDoLocal = _caixasAgrupadasFiltradas[local] ?? [];
+                final bool isLocalVazio = caixasDoLocal.isEmpty;
+                
+                // ===================================================================
+                // **[CORREÇÃO]** - Envolve o Card com Dismissible para apagar locais vazios
+                // ===================================================================
                 return Dismissible(
-                  key: ValueKey('local_$local'), // Chave única para o Dismissible do local
-                  direction: caixasDoLocal.isEmpty ? DismissDirection.endToStart : DismissDirection.none, // Só permite arrastar se estiver vazio
+                  key: ValueKey(local),
+                  direction: isLocalVazio ? DismissDirection.endToStart : DismissDirection.none,
                   background: Container(
                     decoration: BoxDecoration(
-                      color: Colors.redAccent.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(4.0), // Combina com a borda do Card
+                      color: Colors.red.shade700,
+                      borderRadius: BorderRadius.circular(12.0),
                     ),
                     alignment: Alignment.centerRight,
                     padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0), // Mesmo margin do Card
-                    child: const Icon(Icons.delete_sweep_outlined, color: Colors.white, size: 28),
+                    margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+                    child: const Icon(Icons.delete_forever_outlined, color: Colors.white, size: 28),
                   ),
                   confirmDismiss: (direction) async {
                     return await showDialog<bool>(
                       context: context,
                       builder: (BuildContext dialogContext) {
                         return AlertDialog(
-                          title: const Text("Excluir Local"),
-                          content: Text('Tem certeza que deseja excluir o local "$local"? Esta ação não pode ser desfeita.'),
+                          title: const Text("Excluir Apiário Vazio"),
+                          content: Text('Tem certeza que deseja excluir o apiário "$local"? Esta ação não pode ser desfeita.'),
                           actions: <Widget>[
                             TextButton(
                               onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -326,24 +332,24 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
                     ) ?? false;
                   },
                   onDismissed: (direction) {
-                    _excluirLocal(local);
+                    _excluirLocalVazio(local);
                   },
                   child: Card(
-                    // O Card original agora é filho do Dismissible
-                    key: ValueKey(local),
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
                     margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
                     child: ExpansionTile(
-                      initiallyExpanded: _searchController.text.isNotEmpty,
+                      initiallyExpanded: _locaisOrdenadosParaExibicao.length == 1,
                       title: Text('$local (${caixasDoLocal.length})', style: Theme.of(context).textTheme.titleLarge),
-                      children: caixasDoLocal.isEmpty
-                          ? [
-                        const Padding( // Mensagem para locais vazios
-                          padding: EdgeInsets.symmetric(vertical: 16.0),
-                          child: Text("Nenhuma colmeia neste local.", style: TextStyle(fontStyle: FontStyle.italic)),
-                        )
-                      ]
-                          : [ // O `children` original do seu código
-                        const Divider(height: 1),
+                      children: [
+                        if (caixasDoLocal.isEmpty)
+                          const ListTile(
+                            leading: Icon(Icons.info_outline, color: Colors.grey),
+                            title: Text('Nenhuma colmeia neste apiário.'),
+                          )
+                        else
+                          const Divider(height: 1),
+
                         ListView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
@@ -393,7 +399,7 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
                                 _excluirCaixa(id);
                               },
                               child: ListTile(
-                                leading: const Icon(Icons.hive),
+                                leading: const Icon(Icons.hive_outlined),
                                 title: Text('Colmeia-$displayId', style: const TextStyle(fontWeight: FontWeight.bold)),
                                 subtitle: Text(localCaixa),
                                 onTap: () => _navegarParaCaixa(context, id, localCaixa),
@@ -410,7 +416,6 @@ class _ApiariosScreenState extends State<ApiariosScreen> {
                     ),
                   ),
                 );
-                // ## FIM DA ALTERAÇÃO 6/6 ##
               },
             ),
           ),

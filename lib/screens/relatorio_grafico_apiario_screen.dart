@@ -40,7 +40,7 @@ class _RelatorioGraficoApiariosScreenState
 
       Map<String, List<Map<String, dynamic>>> registrosAgrupadosPorLocal = {};
       for (var registro in todosRegistrosProducao) {
-        String local = registro['localApiario'] as String? ?? 'Local Não Especificado';
+        String local = registro['local'] as String? ?? 'Local Não Especificado';
         registrosAgrupadosPorLocal.putIfAbsent(local, () => []).add(registro);
       }
 

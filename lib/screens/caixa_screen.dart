@@ -80,10 +80,6 @@ class _CaixaScreenState extends State<CaixaScreen>
   DateTime? _dataProducaoMaisAntigaDaCaixa;
   DateTime? _dataProducaoMaisRecenteDaCaixa;
 
-  static const List<String> _locaisPreDefinidos = [
-    'Apiário Central', 'Apiário Morro Alto', 'Apiário de Suzano', 'Bosque das Abelhas',
-  ];
-
   late TabController _tabController;
   int _currentTabIndex = 0;
 
@@ -161,23 +157,18 @@ class _CaixaScreenState extends State<CaixaScreen>
     await _carregarDadosEProcessarRelatorio();
   }
 
-  // COLE ESTE MÉTODO CORRIGIDO NO LUGAR DO ANTIGO
   void _processarDadosDeProducaoParaRelatorioLocal(List<Map<String, dynamic>> registros) {
-    // 1. Zera todas as variáveis de total no início
     _totalMelDaCaixa = 0;
     _totalCeraDaCaixa = 0;
     _totalPolenDaCaixa = 0;
-    _totaisPropolisPorCor = {}; // Zera o mapa de totais por cor (a variável da classe)
-    _totalPropolisDaCaixa = 0; // Zera o total geral de própolis
-
+    _totaisPropolisPorCor = {};
+    _totalPropolisDaCaixa = 0;
     _dataProducaoMaisAntigaDaCaixa = null;
     _dataProducaoMaisRecenteDaCaixa = null;
 
     if (registros.isEmpty) return;
 
-    // 2. Percorre cada registro de produção
     for (var registro in registros) {
-      // Lógica de datas (mantida)
       try {
         if (registro['dataProducao'] != null) {
           DateTime dataAtualRegistro = DateTime.parse(registro['dataProducao'] as String);
@@ -190,25 +181,19 @@ class _CaixaScreenState extends State<CaixaScreen>
         }
       } catch (e) { /* ignora erros de data */ }
 
-      // 3. Soma os outros produtos
       _totalMelDaCaixa += ((registro['quantidadeMel'] as num?)?.toDouble() ?? 0);
-      _totalCeraDaCaixa += ((registro['quantidadeCera'] as num?)?.toDouble() ?? 0); // USA 'quantidadeCera'
+      _totalCeraDaCaixa += ((registro['quantidadeCera'] as num?)?.toDouble() ?? 0);
       _totalPolenDaCaixa += ((registro['quantidadePolen'] as num?)?.toDouble() ?? 0);
 
-      // 4. LÓGICA CORRETA PARA PRÓPOLIS
       final double quantidadePropolis = (registro['quantidadePropolis'] as num?)?.toDouble() ?? 0;
       if (quantidadePropolis > 0) {
         final String cor = registro['corDaPropolis'] as String? ?? 'Sem Cor';
-        // Adiciona a quantidade ao total daquela cor específica no mapa da classe
         _totaisPropolisPorCor[cor] = (_totaisPropolisPorCor[cor] ?? 0) + quantidadePropolis;
       }
     }
 
-    // 5. No final, calcula o total geral de própolis a partir do mapa de cores
     _totalPropolisDaCaixa = _totaisPropolisPorCor.values.fold(0.0, (soma, item) => soma + item);
   }
-
-
 
   Future<void> _handleServiceAndUpdate(
       Future<bool> Function() serviceCall, {
@@ -228,7 +213,7 @@ class _CaixaScreenState extends State<CaixaScreen>
         if (failureMessage != null) {
           _showErrorSnackBar(failureMessage);
         } else {
-          _showErrorSnackBar("A operação falhou."); // Mensagem genérica se nenhuma específica for fornecida
+          _showErrorSnackBar("A operação falhou.");
         }
       }
     } catch (e) {
@@ -241,9 +226,6 @@ class _CaixaScreenState extends State<CaixaScreen>
   Future<void> _adicionarAnotacaoComRecarga() async {
     final descricao = await _showInputDescricaoDialog(context, 'Nova Anotação', 'Digite sua anotação aqui...');
     if (descricao != null && descricao.trim().isNotEmpty) {
-      // AdicionarHistorico não retorna bool, então não podemos usar _handleServiceAndUpdate diretamente
-      // a menos que o modifiquemos no service para retornar bool ou envolvamos em um try-catch aqui.
-      // Por enquanto, chamando diretamente e recarregando.
       await _historicoService.adicionarHistorico(widget.caixaId, descricao.trim());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anotação adicionada!')));
@@ -275,9 +257,9 @@ class _CaixaScreenState extends State<CaixaScreen>
               widget.caixaId,
               itemId,
               novaDescricao.trim(),
-              now.toIso8601String(), // timestamp_modificacao
-              '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}', // data_modificacao
-              '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}' // hora_modificacao
+              now.toIso8601String(),
+              '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}',
+              '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}'
           ),
           successMessage: 'Anotação atualizada com sucesso!',
           failureMessage: 'Falha ao atualizar a anotação.'
@@ -293,7 +275,7 @@ class _CaixaScreenState extends State<CaixaScreen>
       builder: (_) => AlertDialog(
         title: Text(title),
         content: SizedBox(
-          height: 120.0, // Altura que você definiu
+          height: 120.0,
           child: TextField(
             controller: controller,
             autofocus: true,
@@ -330,7 +312,6 @@ class _CaixaScreenState extends State<CaixaScreen>
   Future<void> _gerenciarObservacaoFixaComRecarga(BuildContext context, {String? textoAtual}) async {
     final novaObservacao = await _showInputDescricaoDialog(context, textoAtual == null || textoAtual.isEmpty ? 'Adicionar Obs. Fixa' : 'Editar Obs. Fixa', 'Digite sua observação fixa...', initialText: textoAtual);
     if (novaObservacao != null) {
-      // salvarObservacaoFixa não retorna bool, então não podemos usar _handleServiceAndUpdate
       await _historicoService.salvarObservacaoFixa(widget.caixaId, novaObservacao.trim().isEmpty ? null : novaObservacao.trim());
       if(mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(novaObservacao.trim().isEmpty ? 'Observação fixa removida.' : 'Observação fixa salva!')));
@@ -340,97 +321,53 @@ class _CaixaScreenState extends State<CaixaScreen>
   }
 
   Future<void> _excluirObservacaoFixaComRecarga() async {
-    await _historicoService.salvarObservacaoFixa(widget.caixaId, null); // Define como null para excluir
+    await _historicoService.salvarObservacaoFixa(widget.caixaId, null);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Observação fixa removida.')));
       _carregarDadosEProcessarRelatorio();
     }
   }
 
-  Future<void> _editarLocalCaixaComRecarga() async {
-    final novoLocal = await _showSelectOrInputDialog(context, 'Editar Local da Caixa', 'Novo nome do local ou selecione', _localAtualDaCaixa, _locaisPreDefinidos);
-    if (novoLocal == null || novoLocal.trim().isEmpty) return;
-    if (novoLocal.trim().toLowerCase() == _localAtualDaCaixa.toLowerCase()) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O local não foi alterado.')));
-      return;
-    }
-    final sucesso = await _historicoService.atualizarLocalDaCaixa(widget.caixaId, novoLocal.trim());
-    if (!mounted) return;
-    if (sucesso) {
-      setState(() => _localAtualDaCaixa = novoLocal.trim());
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Local atualizado para: $_localAtualDaCaixa')));
-    } else {
-      if (mounted) _showErrorSnackBar('Erro ao atualizar o local.');
-    }
-  }
+  // ===================================================================
+  // **[CORREÇÃO]** - Diálogo de edição de local SIMPLIFICADO
+  // ===================================================================
 
-  Future<String?> _showSelectOrInputDialog(
-      BuildContext context, String title, String hintText, String valorAtual, List<String> predefinedOptions) async {
-    TextEditingController controller = TextEditingController(text: valorAtual);
-    String? localSelecionadoOpcao = predefinedOptions.map((e) => e.toLowerCase()).contains(valorAtual.toLowerCase()) ? predefinedOptions.firstWhere((e) => e.toLowerCase() == valorAtual.toLowerCase()) : null;
-
-    List<String> displayOptions = List.from(predefinedOptions);
-    if (!displayOptions.map((e) => e.toLowerCase()).contains(valorAtual.toLowerCase()) && valorAtual.isNotEmpty) {
-      displayOptions.add(valorAtual);
-    }
-    displayOptions.sort((a,b) => a.toLowerCase().compareTo(b.toLowerCase()));
-
+  // 1. FUNÇÃO DE DIÁLOGO SIMPLES
+  Future<String?> _showSimpleInputDialog(
+      BuildContext context, {
+        required String title,
+        required String labelText,
+        String? initialValue,
+      }) async {
+    final TextEditingController controller = TextEditingController(text: initialValue);
     return showDialog<String>(
       context: context,
-      barrierDismissible: false,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: Text(title),
-          content: StatefulBuilder(builder: (context, setStateDialog) {
-            return SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  TextField(
-                    controller: controller,
-                    decoration: InputDecoration(labelText: 'Nome do Local', hintText: hintText, border: const OutlineInputBorder()),
-                    autofocus: true,
-                    onChanged: (text) {
-                      String? matchingOption;
-                      try { matchingOption = displayOptions.firstWhere((opt) => opt.toLowerCase() == text.trim().toLowerCase()); }
-                      catch (e) { matchingOption = null;}
-                      setStateDialog(() => localSelecionadoOpcao = matchingOption);
-                    },
-                  ),
-                  if (predefinedOptions.isNotEmpty) ...[
-                    const Padding(padding: EdgeInsets.only(top: 16.0, bottom: 8.0), child: Text("Ou selecione um local existente:", style: TextStyle(fontSize: 14.0))),
-                    ConstrainedBox(
-                      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.25),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: displayOptions.length,
-                        itemBuilder: (context, index) {
-                          final option = displayOptions[index];
-                          return RadioListTile<String>(
-                            title: Text(option), value: option, groupValue: localSelecionadoOpcao,
-                            onChanged: (String? value) {
-                              setStateDialog(() { localSelecionadoOpcao = value; if (value != null) controller.text = value;});
-                            },
-                            dense: true, contentPadding: EdgeInsets.zero,
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            );
-          }),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              labelText: labelText,
+              border: const OutlineInputBorder(),
+            ),
+          ),
           actions: <Widget>[
-            TextButton(child: const Text('Cancelar'), onPressed: () => Navigator.of(dialogContext).pop()),
+            TextButton(
+              child: const Text('Cancelar'),
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
             ElevatedButton(
               child: const Text('Salvar'),
               onPressed: () {
                 if (controller.text.trim().isNotEmpty) {
                   Navigator.of(dialogContext).pop(controller.text.trim());
                 } else {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(const SnackBar(content: Text('O nome do local não pode ser vazio.')));
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('O nome do local não pode ser vazio.')),
+                  );
                 }
               },
             ),
@@ -438,6 +375,39 @@ class _CaixaScreenState extends State<CaixaScreen>
         );
       },
     );
+  }
+
+  // 2. FUNÇÃO PRINCIPAL QUE CHAMA O DIÁLOGO SIMPLES
+  Future<void> _editarLocalCaixaComRecarga() async {
+    final novoLocal = await _showSimpleInputDialog(
+      context,
+      title: 'Editar Local da Caixa',
+      labelText: 'Novo nome do local',
+      initialValue: _localAtualDaCaixa,
+    );
+
+    if (novoLocal == null || novoLocal.trim().isEmpty) return;
+
+    if (novoLocal.trim().toLowerCase() == _localAtualDaCaixa.toLowerCase()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O local não foi alterado.')));
+      }
+      return;
+    }
+
+    final sucesso = await _historicoService.atualizarLocalDaCaixa(widget.caixaId, novoLocal.trim());
+    if (!mounted) return;
+
+    if (sucesso) {
+      setState(() => _localAtualDaCaixa = novoLocal.trim());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Local atualizado para: $_localAtualDaCaixa')));
+      }
+    } else {
+      if (mounted) {
+        _showErrorSnackBar('Erro ao atualizar o local.');
+      }
+    }
   }
 
   Widget _buildOutroProdutoRelatorioCaixa(String nome, double total, String unidade) {
@@ -492,46 +462,40 @@ class _CaixaScreenState extends State<CaixaScreen>
     return null;
   }
 
-  // ... outras partes do _CaixaScreenState ...
-
   @override
   Widget build(BuildContext context) {
-    String displayCaixaId = widget.caixaId.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
     return Scaffold(
       backgroundColor: const Color(0xFFF9F9F9),
       appBar: AppBar(
         backgroundColor: const Color(0xFFFFC107),
         foregroundColor: Colors.black87,
         elevation: 2.0,
-        title: _buildAppBarTitle(), // Seu método _buildAppBarTitle
+        title: _buildAppBarTitle(),
         actions: [
           IconButton(
               icon: const Icon(Icons.edit_location_alt_outlined),
               onPressed: _editarLocalCaixaComRecarga,
               tooltip: 'Editar Local da Caixa'),
-          // PopupMenu para OPÇÕES ADICIONAIS (como Adicionar/Editar Observação Fixa)
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert_outlined),
             tooltip: "Mais opções",
-            onSelected: (value) async { // Não precisa mais ser async aqui
+            onSelected: (value) {
               if (value == 'gerenciar_obs_fixa') {
                 _gerenciarObservacaoFixaComRecarga(context, textoAtual: _observacaoFixa);
               }
-              // A exclusão da observação fixa agora é feita pelo Dismissible
             },
             itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
               PopupMenuItem<String>(
                 value: 'gerenciar_obs_fixa',
                 child: ListTile(
                   leading: Icon(_observacaoFixa == null || _observacaoFixa!.isEmpty
-                      ? Icons.push_pin_outlined // Ícone para adicionar
-                      : Icons.edit_note_outlined), // Ícone para editar
+                      ? Icons.push_pin_outlined
+                      : Icons.edit_note_outlined),
                   title: Text(_observacaoFixa == null || _observacaoFixa!.isEmpty
                       ? 'Adicionar Obs. Fixa'
                       : 'Editar Obs. Fixa'),
                 ),
               ),
-              // Não precisa mais do item de excluir observação fixa aqui se o Dismissible estiver ativo
             ],
           ),
         ],
@@ -540,14 +504,13 @@ class _CaixaScreenState extends State<CaixaScreen>
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFFFC107)))
           : Column(
         children: [
-          // **** RESTAURANDO A EXIBIÇÃO DA OBSERVAÇÃO FIXA ****
           if (_observacaoFixa != null && _observacaoFixa!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
               child: Dismissible(
-                key: Key('observacao-fixa-${widget.caixaId}'), // Chave para o Dismissible
+                key: Key('observacao-fixa-${widget.caixaId}'),
                 direction: DismissDirection.endToStart,
-                background: Container( // Seu background para o Dismissible
+                background: Container(
                   decoration: BoxDecoration(
                       color: Colors.redAccent.withOpacity(0.9),
                       borderRadius: BorderRadius.circular(12.0)),
@@ -561,23 +524,21 @@ class _CaixaScreenState extends State<CaixaScreen>
                       ]),
                 ),
                 confirmDismiss: (DismissDirection direction) async {
-                  // Sua lógica de confirmação
                   final bool? confirmado = await showAppConfirmDialog(
                       context,
                       title: 'Excluir Observação Fixa',
                       content: 'Tem certeza que deseja excluir esta observação fixa?',
-                      confirmButtonText: "Excluir" // Garante o texto correto no botão
+                      confirmButtonText: "Excluir"
                   );
                   return confirmado ?? false;
                 },
                 onDismissed: (DismissDirection direction) {
-                  // Sua lógica para excluir
                   _excluirObservacaoFixaComRecarga();
                 },
-                child: Container( // Seu widget para exibir a observação
+                child: Container(
                   padding: const EdgeInsets.all(12.0),
                   decoration: BoxDecoration(
-                      color: Colors.red.shade100, // Sua cor
+                      color: Colors.red.shade100,
                       borderRadius: BorderRadius.circular(12.0),
                       border: Border.all(color: Colors.red.shade400)),
                   child: Row(
@@ -591,12 +552,11 @@ class _CaixaScreenState extends State<CaixaScreen>
                                   color: Colors.red.shade900,
                                   fontWeight: FontWeight.w500,
                                   fontSize: 14.5))),
-                      // Ícone de Edição para a Observação Fixa
                       GestureDetector(
                           onTap: () => _gerenciarObservacaoFixaComRecarga(
                               context,
-                              textoAtual: _observacaoFixa), // Chama a função de gerenciar
-                          child: Icon(Icons.edit_note_rounded, // Ícone de edição
+                              textoAtual: _observacaoFixa),
+                          child: Icon(Icons.edit_note_rounded,
                               color: Colors.red.shade800,
                               size: 24.0)),
                     ],
@@ -604,14 +564,14 @@ class _CaixaScreenState extends State<CaixaScreen>
                 ),
               ),
             )
-          else // Se não houver observação fixa, mostrar o botão de adicionar
+          else
             Padding(
               padding: const EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 4.0),
               child: SizedBox(
                 width: double.infinity,
                 height: 40,
                 child: OutlinedButton.icon(
-                  onPressed: () => _gerenciarObservacaoFixaComRecarga(context), // Chama a função de gerenciar
+                  onPressed: () => _gerenciarObservacaoFixaComRecarga(context),
                   icon: const Icon(Icons.push_pin_outlined, size: 20),
                   label: const Text('Adicionar Observação Fixa', style: TextStyle(fontSize: 14)),
                   style: OutlinedButton.styleFrom(
@@ -622,8 +582,6 @@ class _CaixaScreenState extends State<CaixaScreen>
                 ),
               ),
             ),
-          // **** FIM DA RESTAURAÇÃO DA OBSERVAÇÃO FIXA ****
-
           TabBar(
             controller: _tabController,
             labelColor: Colors.black87,
@@ -650,8 +608,6 @@ class _CaixaScreenState extends State<CaixaScreen>
       floatingActionButton: _buildFloatingActionButton(),
     );
   }
-
-// ... restante do código da _CaixaScreenState (os métodos _buildAnotacoesView, _buildProducaoView, etc. permanecem os mesmos da última versão completa que te dei)
 
   Widget _buildAnotacoesView() {
     if (_historicoItens.isEmpty && !_isLoading) {
@@ -680,7 +636,6 @@ class _CaixaScreenState extends State<CaixaScreen>
         if (item['hora'] != null && (item['hora'] as String).isNotEmpty) {
           displayTimestamp += ' às ${item['hora']}';
         }
-        // Prioriza o timestamp completo se existir
         if (item['timestamp'] != null) {
           try { displayTimestamp = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(item['timestamp']));} catch(_){}
         }
@@ -691,7 +646,7 @@ class _CaixaScreenState extends State<CaixaScreen>
           try {
             subtitleText = "${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(item['timestamp_modificacao']))} (editado)";
           } catch(_){
-            subtitleText += " (editado)"; // Fallback se o timestamp_modificacao for inválido
+            subtitleText += " (editado)";
           }
         }
 
@@ -722,7 +677,7 @@ class _CaixaScreenState extends State<CaixaScreen>
               );
             } else {
               if(mounted) _showErrorSnackBar('Não foi possível excluir: ID da anotação não encontrado.');
-              _carregarDadosEProcessarRelatorio(); // Recarrega para restaurar o item se a exclusão falhar no service
+              _carregarDadosEProcessarRelatorio();
             }
           },
           child: Card(
@@ -851,12 +806,6 @@ class _CaixaScreenState extends State<CaixaScreen>
     );
   }
 
-  // COLE ESTE BLOCO INTEIRO NO SEU CÓDIGO
-
-  // COLE ESTE BLOCO NO LUGAR DO SEU _buildRelatorioCaixaView E _buildOutroProdutoRelatorioCaixa
-
-  // COLE ESTE BLOCO NO LUGAR DO _buildRelatorioCaixaView E SEU MÉTODO AUXILIAR
-
   Widget _buildRelatorioCaixaView() {
     if (_registrosProducaoDaCaixa.isEmpty) {
       return const Center(
@@ -880,9 +829,8 @@ class _CaixaScreenState extends State<CaixaScreen>
     return RefreshIndicator(
       onRefresh: _carregarDadosIniciais,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 80.0), // Padding inferior para o FAB
+        padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 80.0),
         children: <Widget>[
-          // CARD DE PERÍODO MELHORADO
           Card(
             elevation: 2.0,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -907,7 +855,7 @@ class _CaixaScreenState extends State<CaixaScreen>
                       Text(formatDisplayDate(_dataProducaoMaisAntigaDaCaixa), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                     ],
                   ),
-                  const SizedBox(height: 6), // Espaço reduzido entre as datas
+                  const SizedBox(height: 6),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -920,29 +868,22 @@ class _CaixaScreenState extends State<CaixaScreen>
             ),
           ),
           const SizedBox(height: 20),
-          // CARD DE PRODUÇÃO TOTAL MELHORADO
           Card(
             elevation: 2.0,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16.0, 16, 16.0), // Padding ajustado
+              padding: const EdgeInsets.fromLTRB(16, 16.0, 16, 16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Produção Total', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                   const Divider(height: 20, thickness: 1),
-
-                  // Linhas de produto sem ícones e com fonte ajustada
                   _buildLinhaProdutoRelatorio('Mel', _totalMelDaCaixa, 'Kg'),
                   _buildLinhaProdutoRelatorio('Cera de abelha', _totalCeraDaCaixa, 'g'),
                   _buildLinhaProdutoRelatorio('Pólen', _totalPolenDaCaixa, 'g'),
-
-                  // Lógica para própolis por cor
                   ..._totaisPropolisPorCor.entries.map((entry) {
                     return _buildLinhaProdutoRelatorio('Própolis (${entry.key})', entry.value, 'g');
                   }).toList(),
-
-                  // Linha do total de própolis, se houver mais de uma cor
                   if (_totaisPropolisPorCor.length > 1) ...[
                     const Divider(height: 12, indent: 20, endIndent: 20),
                     _buildLinhaProdutoRelatorio('Total Própolis', _totalPropolisDaCaixa, 'g', isTotal: true),
@@ -956,12 +897,11 @@ class _CaixaScreenState extends State<CaixaScreen>
     );
   }
 
-  // NOVO MÉTODO VISUAL PARA AS LINHAS DE PRODUTO (SEM ÍCONE)
   Widget _buildLinhaProdutoRelatorio(String label, double value, String unit, {bool isTotal = false}) {
     if (value <= 0 && !isTotal) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0), // Espaçamento entre as linhas
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -976,8 +916,8 @@ class _CaixaScreenState extends State<CaixaScreen>
           Text(
             '${value.toStringAsFixed(value % 1 == 0 ? 0 : 2)} $unit',
             style: const TextStyle(
-              fontSize: 15, // Mesma fonte das datas
-              fontWeight: FontWeight.bold, // Mesma fonte das datas
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
               color: Colors.black87,
             ),
           ),

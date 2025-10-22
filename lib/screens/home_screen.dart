@@ -61,8 +61,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // COLE ESTA FUNÇÃO COMPLETA E CORRIGIDA NO LUGAR DA ANTIGA
-
   Future<String?> _showInputDialogParaCriacao(
       BuildContext context,
       String title,
@@ -179,7 +177,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-
+  // ===================================================================
+  // **[CORREÇÃO]** - NAVEGAÇÃO ALTERADA APÓS CRIAR CAIXA
+  // ===================================================================
   void _criarNovaCaixa(BuildContext context) async {
     _showLoadingDialog(context, "Buscando locais...");
     try {
@@ -195,19 +195,29 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       if (localDaNovaCaixa != null && localDaNovaCaixa.trim().isNotEmpty) {
+        _showLoadingDialog(context, "Criando colmeia...");
         String novoId = await _historicoService.gerarNovoId();
         await _historicoService.criarCaixa(novoId, localDaNovaCaixa.trim());
+        _dismissDialog(context);
         if (!mounted) return;
+
+        // **ALTERADO:** Navega diretamente para a tela da colmeia recém-criada
+        // ao invés da tela de QR Code.
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => GerarQRCodeScreen(novoId: novoId)),
+          MaterialPageRoute(
+            builder: (_) => CaixaScreen(
+              caixaId: novoId,
+              localCaixa: localDaNovaCaixa.trim(),
+            ),
+          ),
         );
       }
     } catch (e) {
       _dismissDialog(context); // Garante que o diálogo de loading seja fechado em caso de erro
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao buscar locais: ${e.toString()}')),
+          SnackBar(content: Text('Erro ao criar colmeia: ${e.toString()}')),
         );
       }
     }

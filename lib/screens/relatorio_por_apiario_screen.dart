@@ -65,7 +65,7 @@ class _RelatorioPorApiarioScreenState
     Map<String, List<Map<String, dynamic>>> registrosAgrupadosPorLocal = {};
     for (var registro in todosOsRegistrosComLocal) {
       String local =
-          registro['localApiario'] as String? ?? 'Local Não Especificado';
+          registro['local'] as String? ?? 'Local Não Especificado';
       registrosAgrupadosPorLocal.putIfAbsent(local, () => []).add(registro);
     }
 
@@ -156,13 +156,12 @@ class _RelatorioPorApiarioScreenState
       setState(() {
         _dadosRelatorioPorApiario = relatoriosProcessados;
 
-        // **[CORREÇÃO 1]** - INCLUI PÓLEN NA CONDIÇÃO PARA MOSTRAR O TOTAL GERAL
         if (_totaisGerais != null &&
             (_totaisGerais!.totalMel <= 0 &&
                 _totaisGerais!.totalGeleiaReal <= 0 &&
                 _totaisGerais!.totalPropolis <= 0 &&
                 _totaisGerais!.totalCera <= 0 &&
-                _totaisGerais!.totalPolen <= 0)) { // <- CORRIGIDO
+                _totaisGerais!.totalPolen <= 0)) {
           _totaisGerais = null;
         }
         _isLoading = false;
@@ -177,13 +176,12 @@ class _RelatorioPorApiarioScreenState
 
   @override
   Widget build(BuildContext context) {
-    // **[CORREÇÃO 2]** - INCLUI PÓLEN NA CONDIÇÃO PARA MOSTRAR O TOTAL GERAL
     bool semDadosGerais = _totaisGerais == null ||
         (_totaisGerais!.totalMel <= 0 &&
             _totaisGerais!.totalPropolis <= 0 &&
             _totaisGerais!.totalGeleiaReal <= 0 &&
             _totaisGerais!.totalCera <= 0 &&
-            _totaisGerais!.totalPolen <= 0); // <- CORRIGIDO
+            _totaisGerais!.totalPolen <= 0);
 
     return Scaffold(
       body: _isLoading
@@ -223,7 +221,7 @@ class _RelatorioPorApiarioScreenState
                 elevation: 3,
                 color: Colors.blueGrey.shade50,
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0), // Aumenta o padding para o total geral
+                  padding: const EdgeInsets.all(16.0),
                   child: _buildConteudoRelatorioApiario(
                       _totaisGerais!,
                       isTotalGeral: true),
@@ -233,12 +231,11 @@ class _RelatorioPorApiarioScreenState
             // Lógica para mostrar cada apiário individualmente
             if (index < _dadosRelatorioPorApiario.length) {
               final dadosApiario = _dadosRelatorioPorApiario[index];
-              // **[CORREÇÃO 3]** - INCLUI PÓLEN NA CONDIÇÃO PARA MOSTRAR O CARD DO APIÁRIO
               if (dadosApiario.totalMel <= 0 &&
                   dadosApiario.totalGeleiaReal <= 0 &&
                   dadosApiario.totalPropolis <= 0 &&
                   dadosApiario.totalCera <= 0 &&
-                  dadosApiario.totalPolen <= 0) { // <- CORRIGIDO
+                  dadosApiario.totalPolen <= 0) {
                 return const SizedBox.shrink();
               }
               return Card(
@@ -295,11 +292,6 @@ class _RelatorioPorApiarioScreenState
             ),
           ),
 
-        if (!isTotalGeral) ...[
-          // Seus widgets de período e número de caixas... (já estavam corretos)
-        ],
-
-        // Seção de Mel
         if (dados.totalMel > 0) ...[
           const Divider(),
           Padding(
@@ -323,7 +315,6 @@ class _RelatorioPorApiarioScreenState
           )
         ],
 
-        // Seção de Outros Produtos
         const Divider(),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -338,16 +329,16 @@ class _RelatorioPorApiarioScreenState
 
         _buildOutroProdutoItem('Geleia Real:', dados.totalGeleiaReal, 'g'),
 
-        // Própolis com detalhamento
         if (dados.somaPropolisPorCor.isNotEmpty) ...[
-          // ... sua lógica de própolis (já estava correta) ...
+          // Aqui você pode adicionar uma lógica mais complexa para exibir própolis por cor se necessário
+          _buildOutroProdutoItem(
+              'Própolis (Total):', dados.totalPropolis, 'g'),
         ] else if (dados.totalPropolis > 0)
           _buildOutroProdutoItem(
               'Própolis (Total):', dados.totalPropolis, 'g'),
 
         _buildOutroProdutoItem('Cera de Abelha:', dados.totalCera, 'kg/placas'),
 
-        // **[CORREÇÃO 4]** - EXIBE O PÓLEN NA TELA
         _buildOutroProdutoItem('Pólen Coletado:', dados.totalPolen, 'g'),
 
       ],
@@ -376,4 +367,3 @@ class _RelatorioPorApiarioScreenState
     );
   }
 }
-
