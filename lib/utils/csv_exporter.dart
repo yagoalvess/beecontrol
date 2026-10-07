@@ -42,7 +42,7 @@ String gerarCsvRelatorioProducao(
         : 'N/D';
     String numCaixasStr = lineType == 'Apiario' ? data.numeroDeCaixasComProducao.toString() : 'N/A';
 
-    data.somaPorCorMel.forEach((cor, qtd) {
+    if (data.totalMel > 0) {
       List<String> row = [
         lineType,
         data.nomeApiario,
@@ -50,13 +50,13 @@ String gerarCsvRelatorioProducao(
         dataRecenteStr,
         numCaixasStr,
         'Mel',
-        cor,
-        qtd.toStringAsFixed(2),
+        '', // Sem detalhe de cor
+        data.totalMel.toStringAsFixed(2),
         'kg/L',
         '' // Observação vazia
       ];
       sb.writeln(row.map(formatField).join(','));
-    });
+    }
 
     if (data.totalGeleiaReal > 0) {
       List<String> row = [
@@ -73,6 +73,7 @@ String gerarCsvRelatorioProducao(
       ];
       sb.writeln(row.map(formatField).join(','));
     }
+
     if (data.totalPropolis > 0) {
       List<String> row = [
         lineType,
@@ -88,6 +89,23 @@ String gerarCsvRelatorioProducao(
       ];
       sb.writeln(row.map(formatField).join(','));
     }
+
+    if (data.totalPolen > 0) {
+      List<String> row = [
+        lineType,
+        data.nomeApiario,
+        dataAntigaStr,
+        dataRecenteStr,
+        numCaixasStr,
+        'Pólen',
+        '',
+        data.totalPolen.toStringAsFixed(2),
+        'g',
+        ''
+      ];
+      sb.writeln(row.map(formatField).join(','));
+    }
+
     if (data.totalCera > 0) {
       List<String> row = [
         lineType,
@@ -99,21 +117,6 @@ String gerarCsvRelatorioProducao(
         '',
         data.totalCera.toStringAsFixed(2),
         'kg/placas',
-        ''
-      ];
-      sb.writeln(row.map(formatField).join(','));
-    }
-    if (data.totalApitoxina > 0) {
-      List<String> row = [
-        lineType,
-        data.nomeApiario,
-        dataAntigaStr,
-        dataRecenteStr,
-        numCaixasStr,
-        'Apitoxina',
-        '',
-        data.totalApitoxina.toStringAsFixed(2),
-        'g/coletor',
         ''
       ];
       sb.writeln(row.map(formatField).join(','));
